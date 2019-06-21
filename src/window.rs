@@ -49,6 +49,14 @@ where
         self.end - self.start
     }
 
+    fn last(self) -> Option<Self::Item> {
+        if self.start < self.end {
+            Some(self.function.coef(self.end - 1))
+        } else {
+            None
+        }
+    }
+
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         if self.start + n < self.end {
             let val = self.function.coef(self.start + n);
