@@ -1,10 +1,14 @@
-use std::io::Read;
+use std::io::{Read, Error as IoError, ErrorKind as IoErrorKind};
 
-use hound::{WavReader, WavSamples};
+use hound::{WavReader, WavSamples, Sample, Error};
+use ndarray::Array2;
+use num::traits::Zero;
 
 
 pub trait WavReaderExt<R> {
     fn samples_f32<'wr>(&'wr mut self) -> WavSamplesF32<'wr, R>;
+    fn into_array_f32(self) -> Result<Array2<f32>, Error>;
+    fn into_array<T: Sample + Zero + Clone>(self) -> Result<Array2<T>, Error>;
 }
 
 impl<R> WavReaderExt<R> for WavReader<R>
@@ -22,6 +26,24 @@ where
             },
         }
     }
+
+    fn into_array_f32(self) -> Result<Array2<f32>, Error> {
+        let mut s = self;
+
+        let samples = s.duration() as usize;
+        let channels = s.spec().channels as usize;
+        let iter = s.samples_f32();
+
+        wave_to_array(samples, channels, iter)
+    }
+
+    fn into_array<T: Sample + Zero + Clone>(self) -> Result<Array2<T>, Error> {
+        let samples = self.duration() as usize;
+        let channels = self.spec().channels as usize;
+        let iter = self.into_samples::<T>();
+
+        wave_to_array(samples, channels, iter)
+    }
 }
 
 
@@ -34,7 +56,7 @@ impl<'wr, R> Iterator for WavSamplesF32<'wr, R>
 where
     R: Read,
 {
-    type Item = Result<f32, hound::Error>;
+    type Item = Result<f32, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -82,4 +104,24 @@ where
             WavSamplesF32::F32(iter)        => iter.len(),
         }
     }
+}
+
+
+fn wave_to_array<I, T>(samples: usize, channels: usize, iter: I) -> Result<Array2<T>, Error>
+where
+    I: Iterator<Item=Result<T, Error>>,
+    T: Clone + Zero,
+{
+    let mut iter = iter;
+    let mut data = Array2::zeros((samples, channels));
+
+    for i in 0..samples {
+        for c in 0..channels {
+            data[(i, c)] = iter.next().ok_or_else(|| {
+                Error::IoError(IoError::new(IoErrorKind::InvalidData, "not enough data"))
+            })??;
+        }
+    }
+
+    Ok(data)
 }
