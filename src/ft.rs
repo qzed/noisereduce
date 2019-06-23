@@ -74,6 +74,41 @@ where
     output.mapv_inplace(|v| v * scale);
 }
 
+pub fn stft_times<F>(input_len: usize, segment_len: usize, overlap: usize, padded: bool, sample_rate: F)
+    -> Array1<F>
+where
+    F: Float
+{
+    let step = segment_len - overlap;
+    let len = (input_len - overlap) / step;
+
+    let mut output = Array1::zeros(len);
+    stft_times_into(input_len, segment_len, overlap, padded, sample_rate, &mut output);
+    output
+}
+
+pub fn stft_times_into<D, F>(input_len: usize, segment_len: usize, overlap: usize, padded: bool,
+                             sample_rate: F, output: &mut ArrayBase<D, Ix1>)
+where
+    D: DataMut<Elem = F>,
+    F: Float,
+{
+    let step = segment_len - overlap;
+    let len = (input_len - overlap) / step;
+
+    assert!(output.len() >= len);
+
+    let offs = if padded {
+        0
+    } else {
+        (segment_len - 1) / 2
+    };
+
+    for (i, v) in output.slice_mut(s![0..len]).indexed_iter_mut() {
+        *v = F::from(i + offs).unwrap() * F::from(step).unwrap() / sample_rate;
+    }
+}
+
 
 pub fn extend_zero<D, F>(input: &ArrayBase<D, Ix1>, n: usize) -> Array1<F>
 where
@@ -350,8 +385,12 @@ where
         self.len_overlap
     }
 
-    pub fn len_output(&self, len_input: usize) -> usize {
-        (len_input - self.len_overlap) / (self.len_segment - self.len_overlap)
+    pub fn len_output(&self, input_len: usize) -> usize {
+        (input_len - self.len_overlap) / (self.len_segment - self.len_overlap)
+    }
+
+    pub fn row_times<F: Float>(&self, input_len: usize, sample_rate: F) -> Array1<F> {
+        stft_times(input_len, self.len_segment, self.len_overlap, self.padding != Padding::None, sample_rate)
     }
 
     pub fn perform<D>(&mut self, input: &ArrayBase<D, Ix1>) -> Array2<Complex<T>>
