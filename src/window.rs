@@ -1,4 +1,5 @@
 use num::{Float, traits::FloatConst};
+use ndarray::Array1;
 
 
 pub trait WindowFunction<T> {
@@ -15,6 +16,15 @@ pub trait WindowFunction<T> {
             end: self.len(),
         }
     }
+
+    fn to_array(&self) -> Array1<T>
+        where Self: Sized
+    {
+        Array1::from_iter(self.iter())
+    }
+
+    fn with_len(self, len: usize) -> Self
+        where Self: Sized;
 }
 
 pub struct WindowFunctionIter<'a, T, F> {
@@ -92,6 +102,7 @@ where
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Rectangular {
     len: usize,
 }
@@ -110,9 +121,14 @@ impl<T: Float> WindowFunction<T> for Rectangular {
     fn coef(&self, _index: usize) -> T {
         T::one()
     }
+
+    fn with_len(self, len: usize) -> Self {
+        Rectangular { len }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Triangular {
     len: usize,
     l: usize,
@@ -137,9 +153,14 @@ impl<T: Float> WindowFunction<T> for Triangular {
 
         T::one() - T::abs((i - (n / two)) / (l / two))
     }
+
+    fn with_len(self, len: usize) -> Self {
+        Triangular { len, l: self.l }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct GenericHann<T> {
     len: usize,
     a0: T,
@@ -164,9 +185,14 @@ impl<T: Float + FloatConst> WindowFunction<T> for GenericHann<T> {
 
         self.a0 - self.a1 * T::cos(two_pi * i / n)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        GenericHann { len, a0: self.a0, a1: self.a1 }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Blackman<T> {
     len: usize,
     a0: T,
@@ -193,9 +219,14 @@ impl<T: Float + FloatConst> WindowFunction<T> for Blackman<T> {
 
         self.a0 - self.a1 * T::cos(two_pi * i / n) + self.a2 * T::cos(four_pi * i / n)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        Blackman { len, a0: self.a0, a1: self.a1, a2: self.a2 }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Nuttall<T> {
     len: usize,
     a0: T,
@@ -228,9 +259,14 @@ impl<T: Float + FloatConst> WindowFunction<T> for Nuttall<T> {
             + self.a2 * T::cos(four_pi * i / n)
             - self.a3 * T::cos(six_pi * i / n)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        Nuttall { len, a0: self.a0, a1: self.a1, a2: self.a2, a3: self.a3 }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct FlatTop<T> {
     len: usize,
     a0: T,
@@ -266,9 +302,14 @@ impl<T: Float + FloatConst> WindowFunction<T> for FlatTop<T> {
             - self.a3 * T::cos(six_pi * i / n)
             + self.a4 * T::cos(eight_pi * i / n)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        FlatTop { len, a0: self.a0, a1: self.a1, a2: self.a2, a3: self.a3, a4: self.a4 }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Gaussian<T> {
     len: usize,
     sigma: T,
@@ -293,9 +334,14 @@ impl<T: Float> WindowFunction<T> for Gaussian<T> {
         let a = (i - n_two) / (self.sigma * n_two);
         T::exp(-(a*a) / two)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        Gaussian { len, sigma: self.sigma }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct GaussianConfined<T> {
     len: usize,
     sigma_t: T,
@@ -334,9 +380,14 @@ impl<T: Float> WindowFunction<T> for GaussianConfined<T> {
 
         f0 - (f1 * (f2 + f3)) / (f4 + f5)
     }
+
+    fn with_len(self, len: usize) -> Self {
+        GaussianConfined { len, sigma_t: self.sigma_t }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct GeneralizedNormal<T> {
     len: usize,
     sigma: T,
@@ -359,9 +410,14 @@ impl<T: Float> WindowFunction<T> for GeneralizedNormal<T> {
         let n_two = T::from(self.len - 1).unwrap() / T::from(2.0).unwrap();
         T::exp(- T::powf((i - n_two) / (self.sigma * n_two), self.p))
     }
+
+    fn with_len(self, len: usize) -> Self {
+        GeneralizedNormal { len, sigma: self.sigma, p: self.p }
+    }
 }
 
 
+#[derive(Debug, Clone)]
 pub struct Tukey<T> {
     len: usize,
     alpha: T,
@@ -400,6 +456,10 @@ impl<T: Float + FloatConst> WindowFunction<T> for Tukey<T> {
                 )
             ) / two
         }
+    }
+
+    fn with_len(self, len: usize) -> Self {
+        Tukey { len, alpha: self.alpha }
     }
 }
 
@@ -505,4 +565,53 @@ pub fn generalized_normal<T: Float>(len: usize, sigma: T, p: T) -> GeneralizedNo
 
 pub fn tukey<T: Float>(len: usize, alpha: T) -> Tukey<T> {
     Tukey::new(len, alpha)
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Periodic<T> {
+    base: T,
+}
+
+impl<T> Periodic<T> {
+    pub fn new(base: T) -> Self {
+        Periodic { base }
+    }
+
+    pub fn as_base(&self) -> &T {
+        &self.base
+    }
+
+    pub fn as_base_mut(&mut self) -> &mut T {
+        &mut self.base
+    }
+
+    pub fn into_base(self) -> T {
+        self.base
+    }
+}
+
+impl<T, F> WindowFunction<F> for Periodic<T>
+where
+    T: WindowFunction<F>,
+{
+    fn len(&self) -> usize {
+        self.base.len() - 1
+    }
+
+    fn coef(&self, index: usize) -> F {
+        self.base.coef(index)
+    }
+
+    fn with_len(self, len: usize) -> Self {
+        Periodic::new(self.base.with_len(len + 1))
+    }
+}
+
+pub fn periodic<T, F>(base: T) -> Periodic<T>
+where
+    T: WindowFunction<F>,
+{
+    let len = base.len() + 1;
+    Periodic::new(base.with_len(len))
 }
