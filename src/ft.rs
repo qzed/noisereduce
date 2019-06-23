@@ -30,6 +30,16 @@ pub fn ifftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1
     output.slice_mut(s![(input.len()+1)/2..]).assign(&input.slice(s![..input.len()/2]));
 }
 
+pub fn fftfreq<F: Float>(n: usize, sample_rate: F) -> Array1<F> {
+    let scale = sample_rate / F::from(n).unwrap();
+    let center = (n - 1) / 2 + 1;
+
+    let mut result = Array1::zeros(n);
+    result.slice_mut(s![..center]).assign(&Array1::range(F::zero(), F::from(center).unwrap(), F::one()));
+    result.slice_mut(s![center..]).assign(&Array1::range(-F::from(n / 2).unwrap(), F::zero(), F::one()));
+    result.mapv_into(|v| v * scale)
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InversionMethod {
