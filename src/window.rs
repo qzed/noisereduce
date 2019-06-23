@@ -615,3 +615,52 @@ where
     let len = base.len() + 1;
     Periodic::new(base.with_len(len))
 }
+
+
+#[derive(Debug, Clone)]
+pub struct Sqrt<T> {
+    base: T,
+}
+
+impl<T> Sqrt<T> {
+    pub fn new(base: T) -> Self {
+        Sqrt { base }
+    }
+
+    pub fn as_base(&self) -> &T {
+        &self.base
+    }
+
+    pub fn as_base_mut(&mut self) -> &mut T {
+        &mut self.base
+    }
+
+    pub fn into_base(self) -> T {
+        self.base
+    }
+}
+
+impl<T, F> WindowFunction<F> for Sqrt<T>
+where
+    T: WindowFunction<F>,
+    F: Float,
+{
+    fn len(&self) -> usize {
+        self.base.len()
+    }
+
+    fn coef(&self, index: usize) -> F {
+        self.base.coef(index).sqrt()
+    }
+
+    fn with_len(self, len: usize) -> Self {
+        Sqrt::new(self.base.with_len(len))
+    }
+}
+
+pub fn sqrt<T, F>(base: T) -> Sqrt<T>
+where
+    T: WindowFunction<F>,
+{
+    Sqrt::new(base)
+}
