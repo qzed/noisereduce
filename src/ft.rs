@@ -1,7 +1,13 @@
+// see https://ccrma.stanford.edu/~jos/sasp/Summary_STFT_Computation_Using.html
+
 use crate::window::WindowFunction;
 
-use ndarray::{s, ArrayBase, Array1, Axis, Ix1, Data, DataMut};
-use num::traits::{Float, Zero};
+use std::sync::Arc;
+
+use num::Complex;
+use num::traits::{Float, Zero, NumAssign};
+use ndarray::{s, ArrayBase, Array1, Array2, Axis, Ix1, Ix2, Data, DataMut};
+use rustfft::{FFT, FFTnum, FFTplanner};
 
 
 pub fn magnitude_to_db<F: Float>(m: F) -> F {
@@ -227,4 +233,190 @@ where
 
     bins -= &bins.mean_axis(Axis(0));
     bins.fold(F::zero(), |a, b| F::max(a, F::abs(*b))) < eps
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Padding {
+    None,
+    Zero,
+    Even,
+    Odd,
+    Const,
+}
+
+
+pub struct StftBuilder<T> {
+    fft:     Arc<dyn FFT<T>>,
+    padding: Padding,
+    window:  Array1<T>,
+    overlap: Option<usize>,
+    shifted: bool,
+}
+
+impl<T> StftBuilder<T>
+where
+    T: FFTnum,
+{
+    pub fn new<W>(window: &W) -> Self
+    where
+        W: WindowFunction<T>
+    {
+        Self::with_fft(window, FFTplanner::new(false).plan_fft(window.len()))
+    }
+
+    pub fn with_len<W>(window: &W, fft_len: usize) -> Self
+    where
+        W: WindowFunction<T>
+    {
+        Self::with_fft(window, FFTplanner::new(false).plan_fft(fft_len))
+    }
+
+    pub fn with_fft<W>(window: &W, fft: Arc<dyn FFT<T>>) -> Self
+    where
+        W: WindowFunction<T>
+    {
+        StftBuilder {
+            fft,
+            padding: Padding::Zero,
+            window:  window.to_array(),
+            overlap: None,
+            shifted: false,
+        }
+    }
+
+    pub fn overlap(mut self, overlap: usize) -> Self {
+        self.overlap = Some(overlap);
+        self
+    }
+
+    pub fn padding(mut self, padding: Padding) -> Self {
+        self.padding = padding;
+        self
+    }
+
+    pub fn shifted(mut self, shifted: bool) -> Self {
+        self.shifted = shifted;
+        self
+    }
+
+    pub fn build(self) -> Stft<T> {
+        let len_fft = self.fft.len();
+        let len_segment = self.window.len();
+        let len_overlap = self.overlap.unwrap_or_else(|| (len_segment / 4) * 3);
+
+        assert!(len_overlap < len_segment);
+        assert!(len_fft >= len_segment);
+
+        Stft {
+            fft:     self.fft,
+            window:  self.window,
+            padding: self.padding,
+            shifted: self.shifted,
+            buf_in:  Array1::zeros(len_fft),
+            buf_out: Array1::zeros(len_fft),
+            buf_pad: Vec::new(),
+            len_fft, len_segment, len_overlap
+        }
+    }
+}
+
+pub struct Stft<T> {
+    fft:         Arc<dyn FFT<T>>,
+    len_fft:     usize,
+    len_overlap: usize,
+    len_segment: usize,
+    shifted:     bool,
+    window:      Array1<T>,
+    padding:     Padding,
+    buf_in:      Array1<Complex<T>>,
+    buf_out:     Array1<Complex<T>>,
+    buf_pad:     Vec<Complex<T>>,
+}
+
+impl<T> Stft<T>
+where
+    T: FFTnum + NumAssign,
+{
+    pub fn len_segment(&self) -> usize {
+        self.len_segment
+    }
+
+    pub fn len_fft(&self) -> usize {
+        self.len_fft
+    }
+
+    pub fn len_overlap(&self) -> usize {
+        self.len_overlap
+    }
+
+    pub fn len_output(&self, len_input: usize) -> usize {
+        (len_input - self.len_overlap) / (self.len_segment - self.len_overlap)
+    }
+
+    pub fn perform<D>(&mut self, input: &ArrayBase<D, Ix1>) -> Array2<Complex<T>>
+    where
+        D: Data<Elem = Complex<T>>,
+    {
+        let mut output = Array2::zeros((self.len_output(input.len()), self.len_fft));
+        self.perform_into(input, &mut output);
+        output
+    }
+
+    pub fn perform_into<D, M>(&mut self, input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix2>)
+    where
+        D: Data<Elem = Complex<T>>,
+        M: DataMut<Elem = Complex<T>>,
+    {
+        let step = self.len_segment - self.len_overlap;
+        let n_seg = (input.len() - self.len_overlap) / step;
+
+        assert!(output.shape()[0] >= n_seg);
+        assert!(output.shape()[1] >= self.len_fft);
+
+        // pad input signal
+        let input_padded = if self.padding == Padding::None {
+            input.view()
+        } else {
+            self.buf_pad.resize(input.len() + 2 * (self.len_segment / 2), Complex::zero());
+            let mut padded = ndarray::aview_mut1(&mut self.buf_pad[..]);
+
+            match self.padding {
+                Padding::None  => unreachable!(),
+                Padding::Zero  => extend_zero_into(self.len_segment / 2, input, &mut padded),
+                Padding::Even  => extend_even_into(self.len_segment / 2, input, &mut padded),
+                Padding::Odd   => extend_odd_into(self.len_segment / 2, input, &mut padded),
+                Padding::Const => extend_const_into(self.len_segment / 2, input, &mut padded),
+            };
+
+            ndarray::aview1(&self.buf_pad[..])
+        };
+
+        // compute FFTs
+        for i in 0..n_seg {
+            let k = i * step;
+
+            // zero padding at start and end
+            let a = (self.len_fft - self.len_segment) / 2;
+            for j in 0..a {
+                self.buf_in[j] = Complex::zero();
+            }
+            for j in 0..self.len_segment {
+                self.buf_in[a + j] = input_padded[k + j] * self.window[j];
+            }
+            for j in a+self.len_segment..self.len_fft {
+                self.buf_in[j] = Complex::zero();
+            }
+
+            // fft
+            self.fft.process(self.buf_in.as_slice_mut().unwrap(), self.buf_out.as_slice_mut().unwrap());
+
+            // copy to output segment
+            if !self.shifted {
+                output.slice_mut(s![i, 0..self.len_fft]).assign(&self.buf_out);
+            } else {
+                fftshift_into(&self.buf_out, &mut output.slice_mut(s![i, 0..self.len_fft]));
+            }
+        }
+    }
 }
