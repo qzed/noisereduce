@@ -1,6 +1,6 @@
 use crate::window::WindowFunction;
 
-use ndarray::{s, Array1, Axis};
+use ndarray::{s, Array1, ArrayView1, ArrayViewMut1, Axis};
 use num::traits::{Float, Zero};
 
 
@@ -8,11 +8,15 @@ pub fn magnitude_to_db<F: Float>(m: F) -> F {
     F::from(20.0).unwrap() * F::log10(m)
 }
 
-pub fn fftshift<T: Copy + Zero>(input: Array1<T>) -> Array1<T> {
+pub fn fftshift<T: Copy + Zero>(input: &ArrayView1<T>) -> Array1<T> {
     let mut output = Array1::zeros(input.len());
+    fftshift_into(&input.view(), &mut output.view_mut());
+    output
+}
+
+pub fn fftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1<T>) {
     output.slice_mut(s![0..input.len()/2]).assign(&input.slice(s![(input.len()+1)/2..]));
     output.slice_mut(s![input.len()/2..]).assign(&input.slice(s![..(input.len()+1)/2]));
-    output
 }
 
 
