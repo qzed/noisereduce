@@ -8,11 +8,8 @@ use gnuplot::{Figure, AxesCommon, AutoOption};
 fn main() -> Result<(), Error> {
     let path = std::env::args_os().nth(1).expect("missing file argument");
 
-    // load wave file
-    let reader = WavReader::open(path)?;
-    let samples = reader.into_array_f32()?;
-
-    // get first channel
+    // load wave file and extract first channel
+    let (samples, _samples_spec) = WavReader::open(path)?.into_array_f32()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // plot

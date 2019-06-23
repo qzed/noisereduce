@@ -1,14 +1,14 @@
 use std::io::{Read, Error as IoError, ErrorKind as IoErrorKind};
 
-use hound::{WavReader, WavSamples, Sample, Error};
+use hound::{WavReader, WavSamples, WavSpec, Sample, Error};
 use ndarray::Array2;
 use num::traits::Zero;
 
 
 pub trait WavReaderExt<R> {
     fn samples_f32<'wr>(&'wr mut self) -> WavSamplesF32<'wr, R>;
-    fn into_array_f32(self) -> Result<Array2<f32>, Error>;
-    fn into_array<T: Sample + Zero + Clone>(self) -> Result<Array2<T>, Error>;
+    fn into_array_f32(self) -> Result<(Array2<f32>, WavSpec), Error>;
+    fn into_array<T: Sample + Zero + Clone>(self) -> Result<(Array2<T>, WavSpec), Error>;
 }
 
 impl<R> WavReaderExt<R> for WavReader<R>
@@ -27,22 +27,22 @@ where
         }
     }
 
-    fn into_array_f32(self) -> Result<Array2<f32>, Error> {
-        let mut s = self;
+    fn into_array_f32(mut self) -> Result<(Array2<f32>, WavSpec), Error> {
+        let spec = self.spec();
+        let samples = self.duration() as usize;
+        let channels = spec.channels as usize;
+        let iter = self.samples_f32();
 
-        let samples = s.duration() as usize;
-        let channels = s.spec().channels as usize;
-        let iter = s.samples_f32();
-
-        wave_to_array(samples, channels, iter)
+        Ok((wave_to_array(samples, channels, iter)?, spec))
     }
 
-    fn into_array<T: Sample + Zero + Clone>(self) -> Result<Array2<T>, Error> {
+    fn into_array<T: Sample + Zero + Clone>(self) -> Result<(Array2<T>, WavSpec), Error> {
+        let spec = self.spec();
         let samples = self.duration() as usize;
-        let channels = self.spec().channels as usize;
+        let channels = spec.channels as usize;
         let iter = self.into_samples::<T>();
 
-        wave_to_array(samples, channels, iter)
+        Ok((wave_to_array(samples, channels, iter)?, spec))
     }
 }
 
