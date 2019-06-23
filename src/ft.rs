@@ -19,6 +19,17 @@ pub fn fftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1<
     output.slice_mut(s![input.len()/2..]).assign(&input.slice(s![..(input.len()+1)/2]));
 }
 
+pub fn ifftshift<T: Copy + Zero>(input: &ArrayView1<T>) -> Array1<T> {
+    let mut output = Array1::zeros(input.len());
+    ifftshift_into(&input.view(), &mut output.view_mut());
+    output
+}
+
+pub fn ifftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1<T>) {
+    output.slice_mut(s![0..(input.len()+1)/2]).assign(&input.slice(s![input.len()/2..]));
+    output.slice_mut(s![(input.len()+1)/2..]).assign(&input.slice(s![..input.len()/2]));
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InversionMethod {
