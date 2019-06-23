@@ -32,7 +32,7 @@ where
     }
 
     let freq = freq.mapv_into(ft::magnitude_to_db);
-    let freq = ft::fftshift(&freq.view());
+    let freq = ft::fftshift(&freq);
 
     ax.lines(0..freq.len(), freq.iter(), &[Caption(name)]);
 }

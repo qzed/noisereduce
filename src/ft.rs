@@ -1,6 +1,6 @@
 use crate::window::WindowFunction;
 
-use ndarray::{s, Array1, ArrayView1, ArrayViewMut1, Axis};
+use ndarray::{s, ArrayBase, Array1, Axis, Ix1, Data, DataMut};
 use num::traits::{Float, Zero};
 
 
@@ -8,36 +8,64 @@ pub fn magnitude_to_db<F: Float>(m: F) -> F {
     F::from(20.0).unwrap() * F::log10(m)
 }
 
-pub fn fftshift<T: Copy + Zero>(input: &ArrayView1<T>) -> Array1<T> {
+pub fn fftshift<D, T>(input: &ArrayBase<D, Ix1>) -> Array1<T>
+where
+    D: Data<Elem = T>,
+    T: Copy + Zero,
+{
     let mut output = Array1::zeros(input.len());
-    fftshift_into(&input.view(), &mut output.view_mut());
+    fftshift_into(input, &mut output);
     output
 }
 
-pub fn fftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1<T>) {
+pub fn fftshift_into<D, M, T>(input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix1>)
+where
+    D: Data<Elem = T>,
+    M: DataMut<Elem = T>,
+    T: Copy,
+{
     output.slice_mut(s![0..input.len()/2]).assign(&input.slice(s![(input.len()+1)/2..]));
     output.slice_mut(s![input.len()/2..]).assign(&input.slice(s![..(input.len()+1)/2]));
 }
 
-pub fn ifftshift<T: Copy + Zero>(input: &ArrayView1<T>) -> Array1<T> {
+pub fn ifftshift<D, T>(input: &ArrayBase<D, Ix1>) -> Array1<T>
+where
+    D: Data<Elem = T>,
+    T: Copy + Zero,
+{
     let mut output = Array1::zeros(input.len());
     ifftshift_into(&input.view(), &mut output.view_mut());
     output
 }
 
-pub fn ifftshift_into<T: Copy>(input: &ArrayView1<T>, output: &mut ArrayViewMut1<T>) {
+pub fn ifftshift_into<D, M, T>(input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix1>)
+where
+    D: Data<Elem = T>,
+    M: DataMut<Elem = T>,
+    T: Copy,
+{
     output.slice_mut(s![0..(input.len()+1)/2]).assign(&input.slice(s![input.len()/2..]));
     output.slice_mut(s![(input.len()+1)/2..]).assign(&input.slice(s![..input.len()/2]));
 }
 
 pub fn fftfreq<F: Float>(n: usize, sample_rate: F) -> Array1<F> {
-    let scale = sample_rate / F::from(n).unwrap();
-    let center = (n - 1) / 2 + 1;
 
     let mut result = Array1::zeros(n);
-    result.slice_mut(s![..center]).assign(&Array1::range(F::zero(), F::from(center).unwrap(), F::one()));
-    result.slice_mut(s![center..]).assign(&Array1::range(-F::from(n / 2).unwrap(), F::zero(), F::one()));
-    result.mapv_into(|v| v * scale)
+    fftfreq_into(n, sample_rate, &mut result);
+    result
+}
+
+pub fn fftfreq_into<D, F>(n: usize, sample_rate: F, output: &mut ArrayBase<D, Ix1>)
+where
+    D: DataMut<Elem = F>,
+    F: Float,
+{
+    let center = (n - 1) / 2 + 1;
+    let scale = sample_rate / F::from(n).unwrap();
+
+    output.slice_mut(s![..center]).assign(&Array1::range(F::zero(), F::from(center).unwrap(), F::one()));
+    output.slice_mut(s![center..]).assign(&Array1::range(-F::from(n / 2).unwrap(), F::zero(), F::one()));
+    output.mapv_inplace(|v| v * scale);
 }
 
 
