@@ -98,11 +98,13 @@ fn main() -> Result<(), Error> {
     let out = out.mapv(|v| v.re);
 
     // plot
+    let tx_s = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
+    let tx_o = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
+
     let mut fig = Figure::new();
     let ax = fig.axes2d();
-    ax.set_x_range(AutoOption::Fix(0.0), AutoOption::Fix(out.len() as f64 - 1.0));
-    ax.lines(0..samples.len(), samples.iter(), &[]);
-    ax.lines(0..out.len(), out.iter(), &[]);
+    ax.lines(tx_s.iter(), samples.iter(), &[]);
+    ax.lines(tx_o.iter(), out.iter(), &[]);
     fig.show();
 
     // write

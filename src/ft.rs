@@ -55,7 +55,6 @@ where
 }
 
 pub fn fftfreq<F: Float>(n: usize, sample_rate: F) -> Array1<F> {
-
     let mut result = Array1::zeros(n);
     fftfreq_into(n, sample_rate, &mut result);
     result
@@ -106,6 +105,23 @@ where
 
     for (i, v) in output.slice_mut(s![0..len]).indexed_iter_mut() {
         *v = F::from(i + offs).unwrap() * F::from(step).unwrap() / sample_rate;
+    }
+}
+
+pub fn sample_times<F>(num_samples: usize, sample_rate: F) -> Array1<F>
+where
+    F: Float,
+{
+    Array1::range(F::zero(), F::from(num_samples).unwrap(), F::one()).mapv(|v| v / sample_rate)
+}
+
+pub fn sample_times_into<D, F>(sample_rate: F, output: &mut ArrayBase<D, Ix1>)
+where
+    D: DataMut<Elem = F>,
+    F: Float,
+{
+    for (i, v) in output.indexed_iter_mut() {
+        *v = F::from(i).unwrap() / sample_rate
     }
 }
 
@@ -207,12 +223,6 @@ where
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InversionMethod {
-    Basic,      // overlap-add
-    Weighted,   // weighted overlap-add
-}
-
 // check for non-zero overlap add compliance
 pub fn check_nola<W, F>(window: &W, overlap: usize, eps: F) -> bool
 where
@@ -278,6 +288,12 @@ pub enum Padding {
     Even,
     Odd,
     Const,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InversionMethod {
+    Basic,      // overlap-add
+    Weighted,   // weighted overlap-add
 }
 
 
