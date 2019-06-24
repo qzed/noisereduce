@@ -386,6 +386,12 @@ where
     }
 
     pub fn len_output(&self, input_len: usize) -> usize {
+        let input_len = if self.padding != Padding::None {
+            input_len + 2 * (self.len_segment / 2)
+        } else {
+            input_len
+        };
+
         (input_len - self.len_overlap) / (self.len_segment - self.len_overlap)
     }
 
@@ -408,7 +414,7 @@ where
         M: DataMut<Elem = Complex<T>>,
     {
         let step = self.len_segment - self.len_overlap;
-        let n_seg = (input.len() - self.len_overlap) / step;
+        let n_seg = self.len_output(input.len());
 
         assert!(output.shape()[0] >= n_seg);
         assert!(output.shape()[1] >= self.len_fft);
