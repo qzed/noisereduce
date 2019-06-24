@@ -441,15 +441,15 @@ where
         for i in 0..n_seg {
             let k = i * step;
 
-            // zero padding at start and end
-            let a = (self.len_fft - self.len_segment) / 2;
-            for j in 0..a {
+            // zero padding at start and end + windowing
+            let s = (self.len_fft - self.len_segment) / 2;
+            for j in 0..s {
                 self.buf_in[j] = Complex::zero();
             }
             for j in 0..self.len_segment {
-                self.buf_in[a + j] = input_padded[k + j] * self.window[j];
+                self.buf_in[s + j] = input_padded[k + j] * self.window[j];
             }
-            for j in a+self.len_segment..self.len_fft {
+            for j in s+self.len_segment..self.len_fft {
                 self.buf_in[j] = Complex::zero();
             }
 
