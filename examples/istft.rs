@@ -49,6 +49,10 @@ fn main() -> Result<(), Error> {
         ft::InversionMethod::Basic    => 0,
     };
 
+    let hop_ratio = (segment_len - 166) as f32 / ((segment_len - 192) as f32);
+    let overlap = 166;
+    let new_sample_rate = (samples_spec.sample_rate as f32 * hop_ratio) as u32;
+
     let num_segments = spectrum.shape()[0];
     let step_len = segment_len - overlap;
     let len = segment_len + (num_segments - 1) * step_len;
@@ -95,11 +99,11 @@ fn main() -> Result<(), Error> {
     }
 
     // drop imaginary part
-    let out = out.mapv(|v| v.re);
+    let out = out.mapv(|v| v.re * hop_ratio);
 
     // plot
     let tx_s = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
-    let tx_o = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
+    let tx_o = ft::sample_times(out.len(), new_sample_rate as f64);
 
     let mut fig = Figure::new();
     let ax = fig.axes2d();
@@ -110,7 +114,7 @@ fn main() -> Result<(), Error> {
     // write
     let out_spec = hound::WavSpec {
         channels: 1,
-        sample_rate: samples_spec.sample_rate,
+        sample_rate: new_sample_rate,
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
