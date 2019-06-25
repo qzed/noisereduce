@@ -303,6 +303,7 @@ pub struct StftBuilder<T> {
     window:  Array1<T>,
     overlap: Option<usize>,
     shifted: bool,
+    inverse: InversionMethod,
 }
 
 impl<T> StftBuilder<T>
@@ -333,6 +334,7 @@ where
             window:  window.to_array(),
             overlap: None,
             shifted: false,
+            inverse: InversionMethod::Weighted,
         }
     }
 
@@ -351,6 +353,11 @@ where
         self
     }
 
+    pub fn inversion_method(mut self, inverse: InversionMethod) -> Self {
+        self.inverse = inverse;
+        self
+    }
+
     pub fn build(self) -> Stft<T> {
         let len_fft = self.fft.len();
         let len_segment = self.window.len();
@@ -364,6 +371,7 @@ where
             window:  self.window,
             padding: self.padding,
             shifted: self.shifted,
+            inverse: self.inverse,
             buf_in:  Array1::zeros(len_fft),
             buf_out: Array1::zeros(len_fft),
             buf_pad: Vec::new(),
@@ -378,6 +386,7 @@ pub struct Stft<T> {
     len_overlap: usize,
     len_segment: usize,
     shifted:     bool,
+    inverse:     InversionMethod,
     window:      Array1<T>,
     padding:     Padding,
     buf_in:      Array1<Complex<T>>,
@@ -401,7 +410,7 @@ where
         self.len_overlap
     }
 
-    pub fn len_output(&self, input_len: usize) -> usize {
+    pub fn len_output_forward(&self, input_len: usize) -> usize {
         let input_len = if self.padding != Padding::None {
             input_len + 2 * (self.len_segment / 2)
         } else {
@@ -411,26 +420,34 @@ where
         (input_len - self.len_overlap) / (self.len_segment - self.len_overlap)
     }
 
-    pub fn row_times<F: Float>(&self, input_len: usize, sample_rate: F) -> Array1<F> {
+    pub fn forward_times<F: Float>(&self, input_len: usize, sample_rate: F) -> Array1<F> {
         stft_times(input_len, self.len_segment, self.len_overlap, self.padding != Padding::None, sample_rate)
     }
 
-    pub fn perform<D>(&mut self, input: &ArrayBase<D, Ix1>) -> Array2<Complex<T>>
+    pub fn forward_freqs<F: Float>(&self, sample_rate: F) -> Array1<F> {
+        if self.shifted {
+            fftshift(&fftfreq(self.len_fft, sample_rate))
+        } else {
+            fftfreq(self.len_fft, sample_rate)
+        }
+    }
+
+    pub fn forward<D>(&mut self, input: &ArrayBase<D, Ix1>) -> Array2<Complex<T>>
     where
         D: Data<Elem = Complex<T>>,
     {
-        let mut output = Array2::zeros((self.len_output(input.len()), self.len_fft));
-        self.perform_into(input, &mut output);
+        let mut output = Array2::zeros((self.len_output_forward(input.len()), self.len_fft));
+        self.forward_into(input, &mut output);
         output
     }
 
-    pub fn perform_into<D, M>(&mut self, input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix2>)
+    pub fn forward_into<D, M>(&mut self, input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix2>)
     where
         D: Data<Elem = Complex<T>>,
         M: DataMut<Elem = Complex<T>>,
     {
         let step = self.len_segment - self.len_overlap;
-        let n_seg = self.len_output(input.len());
+        let n_seg = self.len_output_forward(input.len());
 
         assert!(output.shape()[0] >= n_seg);
         assert!(output.shape()[1] >= self.len_fft);

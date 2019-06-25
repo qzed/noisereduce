@@ -35,15 +35,15 @@ fn main() -> Result<(), Error> {
 
     let samples = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
-    let out = stft.perform(&samples);
+    let out = stft.forward(&samples);
     let out = out.mapv(|v| ft::magnitude_to_db(v.norm() * window_norm));
 
     // plot
-    let fftfreq = ft::fftshift(&ft::fftfreq(fftlen, samples_spec.sample_rate as f64));
+    let fftfreq = stft.forward_freqs(samples_spec.sample_rate as f64);
     let f0 = fftfreq[0];
     let f1 = fftfreq[fftfreq.len() - 1];
 
-    let times = stft.row_times(samples.len(), samples_spec.sample_rate as f64);
+    let times = stft.forward_times(samples.len(), samples_spec.sample_rate as f64);
     let t0 = times[0];
     let t1 = times[times.len() - 1];
 

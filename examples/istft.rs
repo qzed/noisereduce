@@ -39,7 +39,7 @@ fn main() -> Result<(), Error> {
         .padding(ft::Padding::Zero)
         .build();
 
-    let spectrum = stft.perform(&samples_c);
+    let spectrum = stft.forward(&samples_c);
 
     // compute inverse STFT
     let window = window.to_array();
