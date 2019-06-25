@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use num::Complex;
 use num::traits::{Float, Zero, NumAssign};
-use ndarray::{s, ArrayBase, Array1, Array2, Axis, Ix1, Ix2, Data, DataMut, ViewRepr};
+use ndarray::{s, ArrayBase, Array1, Array2, Axis, Ix1, Ix2, Data, DataMut};
 use rustfft::{FFT, FFTnum, FFTplanner};
 
 
@@ -123,6 +123,20 @@ where
     for (i, v) in output.indexed_iter_mut() {
         *v = F::from(i).unwrap() / sample_rate
     }
+}
+
+pub fn spectrum_to_visual<D, F>(spectrum: &ArrayBase<D, Ix2>) -> Array2<F>
+where
+    D: DataMut<Elem = Complex<F>>,
+    F: Float,
+{
+    let mut output = Array2::zeros(spectrum.raw_dim());
+    for i in 0..output.shape()[0] {
+        let magnitude = spectrum.slice(s![i, ..]).mapv(|v| magnitude_to_db(v.norm()));
+        fftshift_into(&magnitude, &mut output.slice_mut(s![i, ..]));
+    }
+
+    output
 }
 
 
