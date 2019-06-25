@@ -1,5 +1,4 @@
 use sspse::wave::WavReaderExt;
-use sspse::window::WindowFunction;
 use sspse::ft;
 
 use hound::{WavReader, Error};
@@ -16,7 +15,7 @@ fn main() -> Result<(), Error> {
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // fft parameters
-    let fftlen = 512;
+    let fftlen = 256;
     let seglen = 256;
     let overlap = 192;
 
@@ -31,12 +30,10 @@ fn main() -> Result<(), Error> {
         .shifted(true)
         .build();
 
-    let window_norm = 2.0 / window.to_array().scalar_sum();
-
     let samples = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
     let out = stft.process(&samples);
-    let out = out.mapv(|v| ft::magnitude_to_db(v.norm() * window_norm));
+    let out = out.mapv(|v| ft::magnitude_to_db(v.norm()));
 
     // plot
     let fftfreq = stft.spectrum_freqs(samples_spec.sample_rate as f64);
