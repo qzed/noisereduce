@@ -16,7 +16,7 @@ fn main() -> Result<(), Error> {
     let path = std::env::args_os().nth(1).expect("missing file argument");
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path)?.into_array_f32()?;
+    let (samples, samples_spec) = WavReader::open(path)?.collect_convert_dyn::<f32>()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // convert real to complex

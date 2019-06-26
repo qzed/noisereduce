@@ -9,7 +9,7 @@ fn main() -> Result<(), Error> {
     let path = std::env::args_os().nth(1).expect("missing file argument");
 
     // load wave file and extract first channel
-    let (samples, _samples_spec) = WavReader::open(path)?.into_array_f32()?;
+    let (samples, _samples_spec) = WavReader::open(path)?.collect_convert_dyn::<f32>()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // plot
