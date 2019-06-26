@@ -21,6 +21,7 @@ fn main() {
 
     plot(&mut ax, window::rectangular(len), "Rectangular");
     plot(&mut ax, window::bartlett(len), "Bartlett");
+    plot(&mut ax, window::hann(len), "Hann");
     plot(&mut ax, window::hamming(len), "Hamming");
     plot(&mut ax, window::blackman(len), "Blackman");
     plot(&mut ax, window::blackman_exact(len), "Blackman (exact)");
