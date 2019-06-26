@@ -263,7 +263,7 @@ dependencies = [
 [[package]]
 name = "sample"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/RustAudio/sample#7a8d9e57eb6596a681c568c2ec79665dd6024ac6"
 
 [[package]]
 name = "sspse"
@@ -275,7 +275,7 @@ dependencies = [
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustfft 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sample 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sample 0.10.0 (git+https://github.com/RustAudio/sample)",
 ]
 
 [[package]]
@@ -339,7 +339,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum rawpointer 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ebac11a9d2e11f2af219b8b8d833b76b1ea0e054aa0e8d8e9e4cbde353bdf019"
 "checksum rdrand 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 "checksum rustfft 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9c86a9dc178e87c7933f6e79bb93fa26c27548d551ab022b7f24ee2117aa4cb3"
-"checksum sample 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cc0966ad788ec7289562643e05c611b7853e0618b7f9306aafd2fc727abfe168"
+"checksum sample 0.10.0 (git+https://github.com/RustAudio/sample)" = "<none>"
 "checksum strength_reduce 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "965b1bd4ba2fafdbfe9e0e5432b758e4fdbc8c705e6d436a4a5927207de8e96e"
 "checksum transpose 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "643e21580bb0627c7bb09e5cedbb42c8705b19d012de593ed6b0309270b3cd1e"
 "checksum winapi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)" = "f10e386af2b13e47c89e7236a7a14a086791a2b88ebad6df9bf42040195cf770"

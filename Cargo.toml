@@ -15,4 +15,4 @@ gnuplot = "0.0.31"
 rand = "0.6.5"
 num = "0.2.0"
 ndarray = "0.12.1"
-sample = "0.10.0"
+sample = { git = "https://github.com/RustAudio/sample" }
