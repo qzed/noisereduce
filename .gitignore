@@ -1,6 +1,7 @@
 /target
 /data
 **/*.rs.bk
+*.wav
 
 
 #Added by cargo
