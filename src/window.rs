@@ -103,17 +103,18 @@ where
 
 
 #[derive(Debug, Clone)]
-pub struct Rectangular {
+pub struct Rectangular<T> {
     len: usize,
+    _p: std::marker::PhantomData<*const T>,
 }
 
-impl Rectangular {
+impl<T> Rectangular<T> {
     pub fn new(len: usize) -> Self {
-        Rectangular { len }
+        Rectangular { len, _p: std::marker::PhantomData }
     }
 }
 
-impl<T: Float> WindowFunction<T> for Rectangular {
+impl<T: Float> WindowFunction<T> for Rectangular<T> {
     fn len(&self) -> usize {
         self.len
     }
@@ -123,24 +124,25 @@ impl<T: Float> WindowFunction<T> for Rectangular {
     }
 
     fn with_len(self, len: usize) -> Self {
-        Rectangular { len }
+        Rectangular { len, _p: std::marker::PhantomData }
     }
 }
 
 
 #[derive(Debug, Clone)]
-pub struct Triangular {
+pub struct Triangular<T> {
     len: usize,
     l: usize,
+    _p: std::marker::PhantomData<*const T>,
 }
 
-impl Triangular {
+impl<T> Triangular<T> {
     pub fn new(len: usize, l: usize) -> Self {
-        Triangular { len, l }
+        Triangular { len, l, _p: std::marker::PhantomData }
     }
 }
 
-impl<T: Float> WindowFunction<T> for Triangular {
+impl<T: Float> WindowFunction<T> for Triangular<T> {
     fn len(&self) -> usize {
         self.len
     }
@@ -155,7 +157,7 @@ impl<T: Float> WindowFunction<T> for Triangular {
     }
 
     fn with_len(self, len: usize) -> Self {
-        Triangular { len, l: self.l }
+        Triangular { len, l: self.l, _p: std::marker::PhantomData }
     }
 }
 
@@ -464,15 +466,15 @@ impl<T: Float + FloatConst> WindowFunction<T> for Tukey<T> {
 }
 
 
-pub fn rectangular(len: usize) -> Rectangular {
+pub fn rectangular<T: Float>(len: usize) -> Rectangular<T> {
     Rectangular::new(len)
 }
 
-pub fn triangular(len: usize, l: usize) -> Triangular {
+pub fn triangular<T: Float>(len: usize, l: usize) -> Triangular<T> {
     Triangular::new(len, l)
 }
 
-pub fn bartlett(len: usize) -> Triangular {
+pub fn bartlett<T: Float>(len: usize) -> Triangular<T> {
     Triangular::new(len, len - 1)
 }
 
