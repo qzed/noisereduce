@@ -1,8 +1,9 @@
 use sspse::wave::WavReaderExt;
+use sspse::ft;
 
 use hound::{WavReader, Error};
 use num::Complex;
-use ndarray::{s, Axis, Array1};
+use ndarray::{Axis, Array1};
 
 
 fn main() -> Result<(), Error> {
@@ -30,24 +31,7 @@ fn main() -> Result<(), Error> {
     fft.process(input.as_slice_mut().unwrap(), spectrum.as_slice_mut().unwrap());
 
     // adapt spectrum
-    let n = num_input_samples.min(num_output_samples);
-
-    let mut spectrum_new = Array1::zeros(num_output_samples);
-    spectrum_new.slice_mut(s![..n/2]).assign(&spectrum.slice(s![..n/2]));
-    spectrum_new.slice_mut(s![spectrum_new.len()-n/2..]).assign(&spectrum.slice(s![spectrum.len()-n/2..]));
-
-    if num_output_samples < num_input_samples {                 // downsampling
-        if num_output_samples % 2 == 1 {                        // handle odd target center
-            spectrum_new[n/2+1] = (spectrum[n/2+1] + spectrum[spectrum.len() - (n/2+1)]) / 2.0;
-        }
-    } else if num_output_samples > num_input_samples {          // upsampling
-        if num_input_samples % 2 == 1 {                         // handle odd source center
-            spectrum_new[n/2+1] = spectrum[n/2+1] / 2.0;
-            spectrum_new[spectrum.len() - (n/2+1)] = spectrum[n/2+1] / 2.0;
-        }
-    }
-
-    let mut spectrum = spectrum_new;
+    let mut spectrum = ft::spectrum_resize(num_output_samples, &spectrum);
 
     // compute inverse fft
     let ifft = rustfft::FFTplanner::new(true).plan_fft(num_output_samples);

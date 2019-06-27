@@ -327,7 +327,7 @@ where
     where
         W: WindowFunction<T>
     {
-        Self::with_fft(window, FFTplanner::new(false).plan_fft(window.len()))
+        Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
@@ -521,7 +521,7 @@ where
     where
         W: WindowFunction<T>
     {
-        Self::with_ifft(window, FFTplanner::new(false).plan_fft(window.len()))
+        Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
@@ -694,6 +694,49 @@ where
             let n = if n > eps { n } else { T::one() };
 
             output[i] = v * fftnorm / n;
+        }
+    }
+}
+
+
+pub fn spectrum_resize<D, F>(target: usize, input: &ArrayBase<D, Ix1>) -> Array1<Complex<F>>
+where
+    D: Data<Elem = Complex<F>>,
+    F: Float,
+{
+    let mut output = Array1::zeros(target);
+    spectrum_resize_into(input, &mut output);
+    output
+}
+
+pub fn spectrum_resize_into<D, M, F>(input: &ArrayBase<D, Ix1>, output: &mut ArrayBase<M, Ix1>)
+where
+    D: Data<Elem = Complex<F>>,
+    M: DataMut<Elem = Complex<F>>,
+    F: Float,
+{
+    let input_len = input.len();
+    let output_len = output.len();
+
+    if input_len == output_len {
+        output.assign(&input);
+        return;
+    }
+
+    let two = F::from(2.0).unwrap();
+    let n = input_len.min(output_len);
+
+    output.slice_mut(s![..n/2]).assign(&input.slice(s![..n/2]));
+    output.slice_mut(s![output_len-n/2..]).assign(&input.slice(s![input_len-n/2..]));
+
+    if output_len < input_len {                                 // downsampling
+        if output_len % 2 == 1 {                                // handle odd target center
+            output[n/2+1] = (input[n/2+1] + input[input_len - (n/2+1)]) / two;
+        }
+    } else if output_len > input_len {                          // upsampling
+        if input_len % 2 == 1 {                                 // handle odd source center
+            output[n/2+1] = input[n/2+1] / two;
+            output[output_len - (n/2+1)] = input[n/2+1] / two;
         }
     }
 }
