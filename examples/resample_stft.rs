@@ -18,23 +18,25 @@ fn main() -> Result<(), Error> {
     // convert real to complex
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
-    // TODO: algorithm to find perfect window sizes
+    // compute new window sizes by fixing window length in time
+    let new_sample_rate = 16_000;
+
+    let window_secs = 0.02;
+    let window_a_len = (samples_spec.sample_rate as f32 * window_secs) as usize;
+    let window_s_len = (new_sample_rate as f32 * window_secs) as usize;
 
     // build window for fft
-    let window_a = W::periodic(W::sqrt(W::hamming(512)));
-    let window_s = W::periodic(W::sqrt(W::hamming(328)));
-
-    let ratio = window_s.len() as f32 / window_a.len() as f32;
-    let new_sample_rate = samples_spec.sample_rate as f32 * ratio;
+    let window_a = W::periodic(W::sqrt(W::hamming(window_a_len)));
+    let window_s = W::periodic(W::sqrt(W::hamming(window_s_len)));
 
     // build STFT and compute complex spectrum
     let mut stft = ft::StftBuilder::new(&window_a)
-        .overlap(window_a.len() / 4 * 3)
+        .overlap(window_a.len() / 4 * 3)                    // choose 3/4 overlap
         .padding(ft::Padding::Zero)
         .build();
 
     let mut istft = ft::IstftBuilder::new(&window_s)
-        .overlap(window_s.len() / 4 * 3)
+        .overlap(window_s.len() / 4 * 3)                    // choose 3/4 overlap
         .method(ft::InversionMethod::Weighted)
         .remove_padding(true)
         .build();
@@ -52,7 +54,8 @@ fn main() -> Result<(), Error> {
     let out = istft.process(&new_spectrum);
 
     // drop imaginary part and scale
-    let out = out.mapv(|v| v.re * ratio);
+    let norm = window_s.len() as f32 / window_a.len() as f32;
+    let out = out.mapv(|v| v.re * norm);
 
     // write
     let out_spec = hound::WavSpec {
