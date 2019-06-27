@@ -465,6 +465,39 @@ impl<T: Float + FloatConst> WindowFunction<T> for Tukey<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Kaiser<T> {
+    len: usize,
+    pa: T,
+}
+
+impl<T> Kaiser<T> {
+    pub fn new(len: usize, pa: T) -> Self {
+        Kaiser { len, pa }
+    }
+}
+
+impl<T: Float + FloatConst> WindowFunction<T> for Kaiser<T> {
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn coef(&self, index: usize) -> T {
+        let n = T::from(self.len - 1).unwrap();
+        let ix = T::from(2 * index).unwrap();
+
+        let arg = self.pa * (T::one() - (ix / n - T::one()).powi(2)).sqrt();
+        let nom = rgsl::bessel::I0(arg.to_f64().unwrap());
+        let denom = rgsl::bessel::I0(self.pa.to_f64().unwrap());
+
+        T::from(nom / denom).unwrap()
+    }
+
+    fn with_len(self, len: usize) -> Self {
+        Kaiser { len, pa: self.pa }
+    }
+}
+
 
 pub fn rectangular<T: Float>(len: usize) -> Rectangular<T> {
     Rectangular::new(len)
@@ -567,6 +600,10 @@ pub fn generalized_normal<T: Float>(len: usize, sigma: T, p: T) -> GeneralizedNo
 
 pub fn tukey<T: Float>(len: usize, alpha: T) -> Tukey<T> {
     Tukey::new(len, alpha)
+}
+
+pub fn kaiser<T: Float>(len: usize, pa: T) -> Kaiser<T> {
+    Kaiser::new(len, pa)
 }
 
 

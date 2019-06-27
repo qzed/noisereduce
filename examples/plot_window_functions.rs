@@ -33,6 +33,7 @@ fn main() {
     plot(&mut ax, window::gaussian_confined(len, 0.1), "Confined Gaussian (s_t=0.1)");
     plot(&mut ax, window::generalized_normal(len, 0.4, 1.5), "Generalized Normal (s=0.4, p=1.5)");
     plot(&mut ax, window::tukey(len, 0.5), "Tukey (a=0.5)");
+    plot(&mut ax, window::kaiser(len, 8.0), "Kaiser (pa=8)");
 
     fig.show();
 }

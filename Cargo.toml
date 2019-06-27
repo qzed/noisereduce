@@ -16,3 +16,4 @@ rand = "0.6.5"
 num = "0.2.0"
 ndarray = "0.12.1"
 sample = { git = "https://github.com/RustAudio/sample" }
+GSL = "1.1.0"

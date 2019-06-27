@@ -26,8 +26,8 @@ fn main() -> Result<(), Error> {
     let window_s_len = (new_sample_rate as f32 * window_secs) as usize;
 
     // build window for fft
-    let window_a = W::periodic(W::sqrt(W::hamming(window_a_len)));
-    let window_s = W::periodic(W::sqrt(W::hamming(window_s_len)));
+    let window_a = W::periodic(W::sqrt(W::kaiser(window_a_len, 8.0)));
+    let window_s = W::periodic(W::sqrt(W::kaiser(window_s_len, 8.0)));
 
     // build STFT and compute complex spectrum
     let mut stft = ft::StftBuilder::new(&window_a)
