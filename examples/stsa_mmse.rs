@@ -46,12 +46,16 @@ fn main() -> Result<(), Error> {
     let spectrum_orig = spectrum.clone();
 
     // initial noise estimate
-    let noise_len = 5;
+    let noise_len = 3;
     let mut lambda_d = Array1::zeros(segment_len);
+    let mut floor = 0.0;
     for i in 0..noise_len {
-        lambda_d += &spectrum.index_axis(Axis(0), i).mapv(|v| v.norm_sqr() as f64);
+        let yk = spectrum.index_axis(Axis(0), i);
+        lambda_d += &yk.mapv(|v| v.norm_sqr() as f64);
+        floor += yk.fold(0.0, |a, b| a + b.norm_sqr() as f64) / segment_len as f64;
     }
     lambda_d /= noise_len as f64;
+    floor /= noise_len as f64;
 
     // set parameters
     let alpha = 0.98;
@@ -67,6 +71,14 @@ fn main() -> Result<(), Error> {
     for i in 0..num_frames {
         let mut yk = spectrum.index_axis_mut(Axis(0), i);
 
+        // update noise estimate
+        let thr = yk.fold(0.0, |a, b| a + b.norm_sqr() as f64) / segment_len as f64;
+
+        if thr < floor * 1.3 {
+            let a = 0.5;
+            lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr() as f64);
+        }
+
         // calculate gain function
         let g = std::f64::consts::PI.sqrt() / 2.0;
 
@@ -77,9 +89,6 @@ fn main() -> Result<(), Error> {
         let t2 = nu.mapv(|v| (1.0 + v) * rgsl::bessel::I0(v / 2.0) + v * rgsl::bessel::I1(v / 2.0));
 
         gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm() as f64)));
-
-        // update noise estimate
-        // TODO: update lambda_d
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
