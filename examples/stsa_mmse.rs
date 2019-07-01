@@ -20,8 +20,8 @@ fn main() -> Result<(), Error> {
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
     // fft parameters
-    let segment_len = 256;
-    let overlap     = (segment_len / 4) * 3;
+    let segment_len = (samples_spec.sample_rate as f64 * 0.02) as usize;
+    let overlap     = segment_len / 2;
 
     // build window for fft
     let window = W::periodic(W::sqrt(W::hann(segment_len)));
@@ -46,7 +46,7 @@ fn main() -> Result<(), Error> {
     let spectrum_orig = spectrum.clone();
 
     // initial noise estimate
-    let noise_len = 3;
+    let noise_len = 5;
     let mut lambda_d = Array1::zeros(segment_len);
     for i in 0..noise_len {
         lambda_d += &spectrum.index_axis(Axis(0), i).mapv(|v| v.norm_sqr() as f64);
@@ -71,7 +71,7 @@ fn main() -> Result<(), Error> {
         let g = std::f64::consts::PI.sqrt() / 2.0;
 
         let nu = xi.mapv(|v| v / (1.0 + v)) * &gamma;
-        let nu = nu.mapv_into(|v| f64::min(v, 200.0));      // prevent numerical overflow
+        let nu = nu.mapv_into(|v| f64::max(f64::min(v, 200.0), 1e-20));     // prevent over-/underflow
 
         let t1 = nu.mapv(|v| v.sqrt() * f64::exp(-v / 2.0)) / &gamma;
         let t2 = nu.mapv(|v| (1.0 + v) * rgsl::bessel::I0(v / 2.0) + v * rgsl::bessel::I1(v / 2.0));
@@ -84,13 +84,17 @@ fn main() -> Result<(), Error> {
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
             gamma_new.assign(&(yk.mapv(|v| v.norm_sqr() as f64) / &lambda_d));
-            xi = alpha * &gain * &gamma + (1.0 - alpha) * gamma_new.mapv(|v| f64::max(v - 1.0, 0.0));
+
+            let g2 = gain.mapv(|v| v.powi(2));
+            xi = alpha * &g2 * &gamma + (1.0 - alpha) * gamma_new.mapv(|v| f64::max(v - 1.0, 0.0));
+
             gamma.assign(&gamma_new);
         }
 
         // apply gain
         for (j, v) in yk.indexed_iter_mut() {
-            *v *= gain[j] as f32;
+            *v *= f32::min(gain[j] as f32, 1.0);
+            // *v *= gain[j] as f32 * 0.05;
         }
     }
 
