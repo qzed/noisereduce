@@ -132,8 +132,8 @@ where
 {
     let mut output = Array2::zeros(spectrum.raw_dim());
     for i in 0..output.shape()[0] {
-        let magnitude = spectrum.slice(s![i, ..]).mapv(|v| magnitude_to_db(v.norm()));
-        fftshift_into(&magnitude, &mut output.slice_mut(s![i, ..]));
+        let magnitude = spectrum.index_axis(Axis(0), i).mapv(|v| magnitude_to_db(v.norm()));
+        fftshift_into(&magnitude, &mut output.index_axis_mut(Axis(0), i));
     }
 
     output
@@ -668,7 +668,7 @@ where
 
         // overlap and add
         for i in 0..len_spectrum {
-            self.buf_in.assign(&input.slice(s![i, ..]));
+            self.buf_in.assign(&input.index_axis(Axis(0), i));
 
             // TODO: this needs to be inverse -> split into two structs
             self.ifft.process(self.buf_in.as_slice_mut().unwrap(), self.buf_out.as_slice_mut().unwrap());
