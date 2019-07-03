@@ -1,6 +1,6 @@
 use super::VoiceActivityDetector;
 
-use ndarray::{ArrayBase, Ix1, Data};
+use ndarray::{ArrayBase, Axis, Data, Ix1, Ix2};
 use num::{Complex, Float};
 
 
@@ -28,4 +28,14 @@ where
 
         energy > self.floor * self.ratio
     }
+}
+
+
+pub fn noise_floor<T, D>(spectrum: &ArrayBase<D, Ix2>) -> T
+where
+    T: Float,
+    D: Data<Elem=Complex<T>>,
+{
+    let norm = T::one() / T::from(spectrum.shape()[1]).unwrap() / T::from(spectrum.shape()[0]).unwrap();
+    spectrum.fold(T::zero(), |e, v| e + v.norm_sqr() * norm)
 }

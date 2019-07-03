@@ -1,11 +1,11 @@
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
-use sspse::vad::{VoiceActivityDetector, energy::EnergyThresholdVad};
+use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
 
 use hound::{WavReader, Error};
 use num::Complex;
-use ndarray::{Array1, Axis};
+use ndarray::{s, Array1, Axis};
 use gnuplot::{Figure, AxesCommon, AutoOption};
 
 
@@ -49,15 +49,12 @@ fn main() -> Result<(), Error> {
     // initial noise estimate
     let noise_len = 3;
     let mut lambda_d = Array1::zeros(segment_len);
-    let mut noise_floor = 0.0;
     for i in 0..noise_len {
-        let yk = spectrum.index_axis(Axis(0), i);
-        lambda_d += &yk.mapv(|v| v.norm_sqr() as f64);
-        noise_floor += yk.fold(0.0, |a, b| a + b.norm_sqr()) / segment_len as f32;
+        lambda_d += &spectrum.index_axis(Axis(0), i).mapv(|v| v.norm_sqr() as f64);
     }
     lambda_d /= noise_len as f64;
-    noise_floor /= noise_len as f32;
 
+    let noise_floor = vad::energy::noise_floor(&spectrum.slice(s![..3, ..]));
     let vad = EnergyThresholdVad::new(noise_floor, 1.3);
 
     // set parameters
