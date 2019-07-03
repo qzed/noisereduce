@@ -1,6 +1,6 @@
 use super::VoiceActivityDetector;
 
-use ndarray::{ArrayBase, Axis, Data, Ix1, Ix2};
+use ndarray::{ArrayBase, Data, Ix1, Ix2};
 use num::{Complex, Float};
 
 
