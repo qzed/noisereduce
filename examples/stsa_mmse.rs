@@ -66,7 +66,7 @@ fn main() -> Result<(), Error> {
     // initial noise estimate
     let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..])).mapv(f64::from);
 
-    let noise_floor = vad::energy::noise_floor(&spectrum.slice(s![..3, ..]));
+    let noise_floor = vad::energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
     let vad = EnergyThresholdVad::new(noise_floor, 1.3);
 
     // set parameters

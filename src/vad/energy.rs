@@ -52,7 +52,7 @@ where
 /// The spectrum segments are given as 2D array or slice with dimension `[n, m]`
 /// where `n` is the number of spectras to average over and `m` is the length of
 /// a single spectrum.
-pub fn noise_floor<T, D>(spectrum: &ArrayBase<D, Ix2>) -> T
+pub fn noise_floor_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> T
 where
     T: Float,
     D: Data<Elem=Complex<T>>,
