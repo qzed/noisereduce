@@ -4,9 +4,25 @@ use sspse::ft;
 use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
 
 use hound::{WavReader, Error};
-use num::Complex;
-use ndarray::{s, Array1, Axis};
+use num::{Complex, Float};
+use ndarray::{s, Array1, Axis, ArrayBase, Data, Ix2};
 use gnuplot::{Figure, AxesCommon, AutoOption};
+
+
+pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
+where
+    T: Float + std::ops::AddAssign + ndarray::ScalarOperand,
+    D: Data<Elem=Complex<T>>,
+{
+    let mut lambda_d = Array1::zeros(spectrum.shape()[1]);
+    let norm = T::from(spectrum.shape()[0]).unwrap();
+
+    for ((_, i), v) in spectrum.indexed_iter() {
+        lambda_d[i] += v.norm_sqr() / norm;
+    }
+
+    lambda_d
+}
 
 
 fn main() -> Result<(), Error> {
@@ -47,12 +63,7 @@ fn main() -> Result<(), Error> {
     let spectrum_orig = spectrum.clone();
 
     // initial noise estimate
-    let noise_len = 3;
-    let mut lambda_d = Array1::zeros(segment_len);
-    for i in 0..noise_len {
-        lambda_d += &spectrum.index_axis(Axis(0), i).mapv(|v| v.norm_sqr() as f64);
-    }
-    lambda_d /= noise_len as f64;
+    let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..])).mapv(f64::from);
 
     let noise_floor = vad::energy::noise_floor(&spectrum.slice(s![..3, ..]));
     let vad = EnergyThresholdVad::new(noise_floor, 1.3);
