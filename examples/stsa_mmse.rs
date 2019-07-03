@@ -2,12 +2,24 @@ use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
 use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
-use sspse::math::bessel;
+use sspse::math::{bessel, expint};
 
 use hound::{WavReader, Error};
 use num::{Complex, Float};
 use ndarray::{s, Array1, Axis, ArrayBase, Data, Ix2};
 use gnuplot::{Figure, AxesCommon, AutoOption};
+
+
+// SNR estimation:
+// - ml:
+//   - fixed: alpha, beta
+//   - store: gamma-avg
+//   - param: gamma(n)
+//
+// - dd
+//   - fixed: alpha
+//   - store: -
+//   - param: gain(n-1), gamma(n-1), gamma(n)
 
 
 pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
@@ -87,19 +99,21 @@ fn main() -> Result<(), Error> {
         if !vad.detect(&yk) {
             let a = 0.5;
             lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr());
-        } else {
         }
 
         // calculate gain function
         let g = std::f64::consts::PI.sqrt() / 2.0;
 
         let nu = xi.mapv(|v| v / (1.0 + v)) * &gamma;
-        // let nu = nu.mapv_into(|v| v.min(200.0).max(1e-10));             // prevent over-/underflow
 
         let t1 = nu.mapv(|v| v.sqrt() * (-v / 2.0).exp()) / &gamma;
         let t2 = nu.mapv(|v| (1.0 + v) * bessel::I0(v / 2.0) + v * bessel::I1(v / 2.0));
 
         gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm())));
+
+        // let nu = &xi / &(1.0 + &xi) * &gamma;
+        // let nu = nu.mapv_into(|v| v.max(1e-50).min(500.0));     // prevent over/underflows
+        // gain.assign(&(&xi / &(1.0 + &xi) * nu.mapv_into(|v| (-0.5 * expint::Ei(-v)).exp())));
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
