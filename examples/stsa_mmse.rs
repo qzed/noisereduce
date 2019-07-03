@@ -2,6 +2,7 @@ use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
 use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
+use sspse::math::bessel;
 
 use hound::{WavReader, Error};
 use num::{Complex, Float};
@@ -96,7 +97,7 @@ fn main() -> Result<(), Error> {
         let nu = nu.mapv_into(|v| f64::max(f64::min(v, 200.0), 1e-20));     // prevent over-/underflow
 
         let t1 = nu.mapv(|v| v.sqrt() * f64::exp(-v / 2.0)) / &gamma;
-        let t2 = nu.mapv(|v| (1.0 + v) * rgsl::bessel::I0(v / 2.0) + v * rgsl::bessel::I1(v / 2.0));
+        let t2 = nu.mapv(|v| (1.0 + v) * bessel::I0(v / 2.0) + v * bessel::I1(v / 2.0));
 
         gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm() as f64)));
 

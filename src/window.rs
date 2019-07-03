@@ -1,3 +1,5 @@
+use crate::math::bessel;
+
 use num::{Float, traits::FloatConst};
 use ndarray::Array1;
 
@@ -485,12 +487,9 @@ impl<T: Float + FloatConst> WindowFunction<T> for Kaiser<T> {
     fn coef(&self, index: usize) -> T {
         let n = T::from(self.len - 1).unwrap();
         let ix = T::from(2 * index).unwrap();
-
         let arg = self.pa * (T::one() - (ix / n - T::one()).powi(2)).sqrt();
-        let nom = rgsl::bessel::I0(arg.to_f64().unwrap());
-        let denom = rgsl::bessel::I0(self.pa.to_f64().unwrap());
 
-        T::from(nom / denom).unwrap()
+        bessel::I0(arg) / bessel::I0(self.pa)
     }
 
     fn with_len(self, len: usize) -> Self {
