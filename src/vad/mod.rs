@@ -4,6 +4,7 @@ use num::{Complex, Float};
 pub mod energy;
 
 
+/// Voice activity detector with boolean output.
 pub trait VoiceActivityDetector<T> {
     fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> bool
     where
@@ -24,6 +25,7 @@ pub trait VoicePresenceDetector<T> {
 }
 
 
+/// Voice activity detector with probabilisitc output.
 impl<V, T> VoicePresenceDetector<T> for V
 where
     V: VoiceActivityDetector<T>,
