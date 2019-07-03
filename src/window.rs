@@ -1,4 +1,4 @@
-use crate::math::bessel;
+use crate::math::{bessel, NumCastUnchecked};
 
 use num::{Float, traits::FloatConst};
 use ndarray::Array1;
@@ -479,7 +479,7 @@ impl<T> Kaiser<T> {
     }
 }
 
-impl<T: Float + FloatConst> WindowFunction<T> for Kaiser<T> {
+impl<T: Float + FloatConst + NumCastUnchecked> WindowFunction<T> for Kaiser<T> {
     fn len(&self) -> usize {
         self.len
     }

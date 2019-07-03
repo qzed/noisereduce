@@ -125,14 +125,16 @@ where
     }
 }
 
-pub fn spectrum_to_visual<D, F>(spectrum: &ArrayBase<D, Ix2>) -> Array2<F>
+pub fn spectrum_to_visual<D, F>(spectrum: &ArrayBase<D, Ix2>, min: F, max: F) -> Array2<F>
 where
     D: DataMut<Elem = Complex<F>>,
     F: Float,
 {
     let mut output = Array2::zeros(spectrum.raw_dim());
     for i in 0..output.shape()[0] {
-        let magnitude = spectrum.index_axis(Axis(0), i).mapv(|v| magnitude_to_db(v.norm()));
+        let magnitude = spectrum.index_axis(Axis(0), i)
+            .mapv(|v| magnitude_to_db(v.norm()).max(min).min(max));
+
         fftshift_into(&magnitude, &mut output.index_axis_mut(Axis(0), i));
     }
 

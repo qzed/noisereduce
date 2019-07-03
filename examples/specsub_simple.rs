@@ -95,7 +95,7 @@ fn main() -> Result<(), Error> {
     let t1 = times[times.len() - 1];
 
     // plot original spectrum
-    let visual = ft::spectrum_to_visual(&spectrum_orig);
+    let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
 
     let mut fig = Figure::new();
     let ax = fig.axes2d();
@@ -106,7 +106,7 @@ fn main() -> Result<(), Error> {
     fig.show();
 
     // plot modified spectrum
-    let visual = ft::spectrum_to_visual(&spectrum);
+    let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
 
     let mut fig = Figure::new();
     let ax = fig.axes2d();

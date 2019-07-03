@@ -31,7 +31,7 @@ fn main() -> Result<(), Error> {
     let path_out = std::env::args_os().nth(2).expect("missing output file argument");
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f32>()?;
+    let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // convert real to complex
@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
     let spectrum_orig = spectrum.clone();
 
     // initial noise estimate
-    let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..])).mapv(f64::from);
+    let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..]));
 
     let noise_floor = vad::energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
     let vad = EnergyThresholdVad::new(noise_floor, 1.3);
@@ -74,9 +74,9 @@ fn main() -> Result<(), Error> {
 
     // initial a priori and a posteriori snr
     let mut gain = Array1::zeros(segment_len);
-    let mut gamma = &spectrum.index_axis(Axis(0), 0).mapv(|v| v.norm_sqr() as f64) / &lambda_d;
+    let mut gamma = &spectrum.index_axis(Axis(0), 0).mapv(|v| v.norm_sqr()) / &lambda_d;
     let mut gamma_new = Array1::zeros(segment_len);
-    let mut xi = alpha + (1.0 - alpha) * gamma.mapv(|v| f64::max(v - 1.0, 0.0));
+    let mut xi = alpha + (1.0 - alpha) * gamma.mapv(|v| (v - 1.0).max(0.0));
 
     // main algorithm loop over spectrum frames
     let num_frames = spectrum.shape()[0];
@@ -86,7 +86,7 @@ fn main() -> Result<(), Error> {
         // update noise estimate
         if !vad.detect(&yk) {
             let a = 0.5;
-            lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr() as f64);
+            lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr());
         } else {
         }
 
@@ -94,33 +94,36 @@ fn main() -> Result<(), Error> {
         let g = std::f64::consts::PI.sqrt() / 2.0;
 
         let nu = xi.mapv(|v| v / (1.0 + v)) * &gamma;
-        let nu = nu.mapv_into(|v| f64::max(f64::min(v, 200.0), 1e-20));     // prevent over-/underflow
+        // let nu = nu.mapv_into(|v| v.min(200.0).max(1e-10));             // prevent over-/underflow
 
-        let t1 = nu.mapv(|v| v.sqrt() * f64::exp(-v / 2.0)) / &gamma;
+        let t1 = nu.mapv(|v| v.sqrt() * (-v / 2.0).exp()) / &gamma;
         let t2 = nu.mapv(|v| (1.0 + v) * bessel::I0(v / 2.0) + v * bessel::I1(v / 2.0));
 
-        gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm() as f64)));
+        gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm())));
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
-            gamma_new.assign(&(yk.mapv(|v| v.norm_sqr() as f64) / &lambda_d));
+            gamma_new.assign(&(yk.mapv(|v| v.norm_sqr()) / &lambda_d));
 
             let g2 = gain.mapv(|v| v.powi(2));
-            xi = alpha * &g2 * &gamma + (1.0 - alpha) * gamma_new.mapv(|v| f64::max(v - 1.0, 0.0));
+            xi = alpha * &g2 * &gamma + (1.0 - alpha) * gamma_new.mapv(|v| (v - 1.0).max(0.0));
 
             gamma.assign(&gamma_new);
+
+            xi.mapv_inplace(|v| v.min(1e3));
+            gamma.mapv_inplace(|v| v.min(1e3));
         }
 
         // apply gain
         for (j, v) in yk.indexed_iter_mut() {
-            *v *= f32::min(gain[j] as f32, 1.0);
+            *v *= gain[j].min(1.0);
             // *v *= gain[j] as f32 * 0.05;
         }
     }
 
     // perform istft
     let out = istft.process(&spectrum);
-    let out = out.mapv(|v| v.re);
+    let out = out.mapv(|v| v.re as f32);
 
     // write
     let out_spec = hound::WavSpec {
@@ -146,7 +149,7 @@ fn main() -> Result<(), Error> {
     let t1 = times[times.len() - 1];
 
     // plot original spectrum
-    let visual = ft::spectrum_to_visual(&spectrum_orig);
+    let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
 
     let mut fig = Figure::new();
     let ax = fig.axes2d();
@@ -157,7 +160,7 @@ fn main() -> Result<(), Error> {
     fig.show();
 
     // plot modified spectrum
-    let visual = ft::spectrum_to_visual(&spectrum);
+    let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
 
     let mut fig = Figure::new();
     let ax = fig.axes2d();
