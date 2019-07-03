@@ -1,6 +1,7 @@
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
+use sspse::vad::{VoiceActivityDetector, energy::EnergyThresholdVad};
 
 use hound::{WavReader, Error};
 use num::Complex;
@@ -48,14 +49,16 @@ fn main() -> Result<(), Error> {
     // initial noise estimate
     let noise_len = 3;
     let mut lambda_d = Array1::zeros(segment_len);
-    let mut floor = 0.0;
+    let mut noise_floor = 0.0;
     for i in 0..noise_len {
         let yk = spectrum.index_axis(Axis(0), i);
         lambda_d += &yk.mapv(|v| v.norm_sqr() as f64);
-        floor += yk.fold(0.0, |a, b| a + b.norm_sqr() as f64) / segment_len as f64;
+        noise_floor += yk.fold(0.0, |a, b| a + b.norm_sqr()) / segment_len as f32;
     }
     lambda_d /= noise_len as f64;
-    floor /= noise_len as f64;
+    noise_floor /= noise_len as f32;
+
+    let vad = EnergyThresholdVad::new(noise_floor, 1.3);
 
     // set parameters
     let alpha = 0.98;
@@ -72,11 +75,10 @@ fn main() -> Result<(), Error> {
         let mut yk = spectrum.index_axis_mut(Axis(0), i);
 
         // update noise estimate
-        let thr = yk.fold(0.0, |a, b| a + b.norm_sqr() as f64) / segment_len as f64;
-
-        if thr < floor * 1.3 {
+        if !vad.detect(&yk) {
             let a = 0.5;
             lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr() as f64);
+        } else {
         }
 
         // calculate gain function
