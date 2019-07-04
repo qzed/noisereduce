@@ -1,29 +1,29 @@
-use sspse::wave::WavReaderExt;
 use sspse::ft;
+use sspse::wave::WavReaderExt;
 
-use hound::{WavReader, Error};
+use clap::{value_t_or_exit, App, Arg};
+use hound::{Error, WavReader};
+use ndarray::{Array1, Axis};
 use num::Complex;
-use ndarray::{Axis, Array1};
-use clap::{App, Arg, value_t_or_exit};
 
 
 fn app() -> App<'static, 'static> {
     App::new("Example: Re-sample Audio Signal using Fast Fourier Transform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
-            .help("The input file to use (wav)")
-            .value_name("INPUT")
-            .required(true))
+                .help("The input file to use (wav)")
+                .value_name("INPUT")
+                .required(true))
         .arg(Arg::with_name("output")
-            .help("The file to write the result to (wav)")
-            .value_name("OUTPUT")
-            .required(true))
+                .help("The file to write the result to (wav)")
+                .value_name("OUTPUT")
+                .required(true))
         .arg(Arg::with_name("samplerate")
-            .help("The target sample-rate")
-            .short("r")
-            .long("sample-rate")
-            .takes_value(true)
-            .default_value("24000"))
+                .help("The target sample-rate")
+                .short("r")
+                .long("sample-rate")
+                .takes_value(true)
+                .default_value("24000"))
 }
 
 fn main() -> Result<(), Error> {
@@ -42,7 +42,8 @@ fn main() -> Result<(), Error> {
 
     // compute parameters based on new sample rate
     let num_input_samples = input.len();
-    let num_output_samples = (num_input_samples as f64 * sample_rate as f64 / samples_spec.sample_rate as f64) as usize;
+    let num_output_samples =
+        (num_input_samples as f64 * sample_rate as f64 / samples_spec.sample_rate as f64) as usize;
 
     // compute fft
     let mut spectrum = Array1::zeros(num_input_samples);

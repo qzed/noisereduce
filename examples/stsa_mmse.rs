@@ -1,15 +1,15 @@
+use sspse::ft;
+use sspse::vad::b::{power, power::PowerThresholdVad, VoiceActivityDetector as _};
+// use sspse::vad::f::{energy, VoiceActivityDetector as _, energy::EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
-use sspse::ft;
-use sspse::vad::b::{power, VoiceActivityDetector as _, power::PowerThresholdVad};
-// use sspse::vad::f::{energy, VoiceActivityDetector as _, energy::EnergyThresholdVad};
 use sspse::math::{bessel, expint, NumCastUnchecked};
 
-use hound::{WavReader, Error};
-use num::{Complex, Float, traits::FloatConst};
-use ndarray::{s, azip, Array1, Axis, ArrayBase, Data, DataMut, Ix1, Ix2};
-use gnuplot::{Figure, AxesCommon, AutoOption};
 use clap::{App, Arg};
+use gnuplot::{AutoOption, AxesCommon, Figure};
+use hound::{Error, WavReader};
+use ndarray::{azip, s, Array1, ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
+use num::{traits::FloatConst, Complex, Float};
 
 
 // SNR estimation:
@@ -35,13 +35,13 @@ fn gain_mmse<T, D1, D2, D3, Do>(
     y_spec: &ArrayBase<D1, Ix1>,
     xi: &ArrayBase<D2, Ix1>,
     gamma: &ArrayBase<D3, Ix1>,
-    gain: &mut ArrayBase<Do, Ix1>)
-where
+    gain: &mut ArrayBase<Do, Ix1>,
+) where
     T: Float + FloatConst + NumCastUnchecked,
-    D1: Data<Elem=Complex<T>>,
-    D2: Data<Elem=T>,
-    D3: Data<Elem=T>,
-    Do: DataMut<Elem=T>,
+    D1: Data<Elem = Complex<T>>,
+    D2: Data<Elem = T>,
+    D3: Data<Elem = T>,
+    Do: DataMut<Elem = T>,
 {
     let nu_min = T::from(1e-50).unwrap();
     let nu_max = T::from(500.0).unwrap();
@@ -64,13 +64,13 @@ fn gain_logmmse<T, D1, D2, D3, Do>(
     _y_spec: &ArrayBase<D1, Ix1>,
     xi: &ArrayBase<D2, Ix1>,
     gamma: &ArrayBase<D3, Ix1>,
-    gain: &mut ArrayBase<Do, Ix1>)
-where
+    gain: &mut ArrayBase<Do, Ix1>,
+) where
     T: Float + FloatConst + NumCastUnchecked,
-    D1: Data<Elem=Complex<T>>,
-    D2: Data<Elem=T>,
-    D3: Data<Elem=T>,
-    Do: DataMut<Elem=T>,
+    D1: Data<Elem = Complex<T>>,
+    D2: Data<Elem = T>,
+    D3: Data<Elem = T>,
+    Do: DataMut<Elem = T>,
 {
     let nu_min = T::from(1e-50).unwrap();
     let nu_max = T::from(500.0).unwrap();
@@ -85,11 +85,10 @@ where
     });
 }
 
-
 pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
 where
     T: Float + std::ops::AddAssign + ndarray::ScalarOperand,
-    D: Data<Elem=Complex<T>>,
+    D: Data<Elem = Complex<T>>,
 {
     let mut lambda_d = Array1::zeros(spectrum.shape()[1]);
     let norm = T::from(spectrum.shape()[0]).unwrap();
@@ -101,26 +100,25 @@ where
     lambda_d
 }
 
-
 fn app() -> App<'static, 'static> {
     App::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
-            .help("The input file to use (wav)")
-            .value_name("INPUT")
-            .required(true))
+                .help("The input file to use (wav)")
+                .value_name("INPUT")
+                .required(true))
         .arg(Arg::with_name("output")
-            .help("The file to write the result to (wav)")
-            .value_name("OUTPUT")
-            .required(false))
+                .help("The file to write the result to (wav)")
+                .value_name("OUTPUT")
+                .required(false))
         .arg(Arg::with_name("plot")
-            .help("Wheter to plot the results or not")
-            .short("p")
-            .long("plot"))
+                .help("Wheter to plot the results or not")
+                .short("p")
+                .long("plot"))
         .arg(Arg::with_name("log_mmse")
-            .help("Use log-MMSE instead of plain MMSE")
-            .short("l")
-            .long("log-mmse"))
+                .help("Use log-MMSE instead of plain MMSE")
+                .short("l")
+                .long("log-mmse"))
 }
 
 fn main() -> Result<(), Error> {
@@ -140,7 +138,7 @@ fn main() -> Result<(), Error> {
 
     // fft parameters
     let segment_len = (samples_spec.sample_rate as f64 * 0.02) as usize;
-    let overlap     = segment_len / 2;
+    let overlap = segment_len / 2;
 
     // build window for fft
     let window = W::periodic(W::sqrt(W::hann(segment_len)));

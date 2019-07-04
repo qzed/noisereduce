@@ -1,29 +1,29 @@
+use sspse::ft;
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
-use sspse::ft;
 
-use hound::{WavReader, Error};
-use num::Complex;
-use ndarray::Axis;
-use gnuplot::Figure;
 use clap::{App, Arg};
+use gnuplot::Figure;
+use hound::{Error, WavReader};
+use ndarray::Axis;
+use num::Complex;
 
 
 fn app() -> App<'static, 'static> {
     App::new("Example: Forward and Inverse Short-Time Fourier Transform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
-            .help("The input file to use (wav)")
-            .value_name("INPUT")
-            .required(true))
+                .help("The input file to use (wav)")
+                .value_name("INPUT")
+                .required(true))
         .arg(Arg::with_name("output")
-            .help("The file to write the result to (wav)")
-            .value_name("OUTPUT")
-            .required(false))
+                .help("The file to write the result to (wav)")
+                .value_name("OUTPUT")
+                .required(false))
         .arg(Arg::with_name("plot")
-            .help("Wheter to plot the results or not")
-            .short("p")
-            .long("plot"))
+                .help("Wheter to plot the results or not")
+                .short("p")
+                .long("plot"))
 }
 
 fn main() -> Result<(), Error> {

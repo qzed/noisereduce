@@ -1,8 +1,8 @@
 use sspse::window;
 use sspse::window::WindowFunction;
 
-use gnuplot::{Axes2D, AxesCommon, AutoOption, Figure};
 use clap::App;
+use gnuplot::{AutoOption, Axes2D, AxesCommon, Figure};
 
 
 fn app() -> App<'static, 'static> {

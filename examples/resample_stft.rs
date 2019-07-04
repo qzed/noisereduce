@@ -1,30 +1,30 @@
+use sspse::ft;
 use sspse::wave::WavReaderExt;
 use sspse::window::{self as W, WindowFunction};
-use sspse::ft;
 
-use hound::{WavReader, Error};
-use num::Complex;
-use ndarray::{Axis, Array2};
 use clap::{value_t_or_exit, App, Arg};
+use hound::{Error, WavReader};
+use ndarray::{Array2, Axis};
+use num::Complex;
 
 
 fn app() -> App<'static, 'static> {
     App::new("Example: Re-sample Audio Signal using Short-Time Fourier Transform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
-            .help("The input file to use (wav)")
-            .value_name("INPUT")
-            .required(true))
+                .help("The input file to use (wav)")
+                .value_name("INPUT")
+                .required(true))
         .arg(Arg::with_name("output")
-            .help("The file to write the result to (wav)")
-            .value_name("OUTPUT")
-            .required(true))
+                .help("The file to write the result to (wav)")
+                .value_name("OUTPUT")
+                .required(true))
         .arg(Arg::with_name("samplerate")
-            .help("The target sample-rate")
-            .short("r")
-            .long("sample-rate")
-            .takes_value(true)
-            .default_value("24000"))
+                .help("The target sample-rate")
+                .short("r")
+                .long("sample-rate")
+                .takes_value(true)
+                .default_value("24000"))
 }
 
 fn main() -> Result<(), Error> {
@@ -52,12 +52,12 @@ fn main() -> Result<(), Error> {
 
     // build STFT and compute complex spectrum
     let mut stft = ft::StftBuilder::new(&window_a)
-        .overlap(window_a.len() / 4 * 3)                    // choose 3/4 overlap
+        .overlap(window_a.len() / 4 * 3)
         .padding(ft::Padding::Zero)
         .build();
 
     let mut istft = ft::IstftBuilder::new(&window_s)
-        .overlap(window_s.len() / 4 * 3)                    // choose 3/4 overlap
+        .overlap(window_s.len() / 4 * 3)
         .method(ft::InversionMethod::Weighted)
         .remove_padding(true)
         .build();
@@ -68,7 +68,10 @@ fn main() -> Result<(), Error> {
     // adapt spectrum
     let mut new_spectrum = Array2::zeros((spectrum.shape()[0], window_s.len()));
     for i in 0..spectrum.shape()[0] {
-        ft::spectrum_resize_into(&spectrum.index_axis(Axis(0), i), &mut new_spectrum.index_axis_mut(Axis(0), i));
+        ft::spectrum_resize_into(
+            &spectrum.index_axis(Axis(0), i),
+            &mut new_spectrum.index_axis_mut(Axis(0), i),
+        );
     }
 
     // perform istft to restore signal

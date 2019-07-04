@@ -1,20 +1,20 @@
-use sspse::wave::WavReaderExt;
 use sspse::ft;
+use sspse::wave::WavReaderExt;
 
-use hound::{WavReader, Error};
-use num::Complex;
-use ndarray::{Axis};
-use gnuplot::{Figure, AxesCommon, AutoOption};
 use clap::{App, Arg};
+use gnuplot::{AutoOption, AxesCommon, Figure};
+use hound::{Error, WavReader};
+use ndarray::Axis;
+use num::Complex;
 
 
 fn app() -> App<'static, 'static> {
     App::new("Example: Compute and Plot Short-Time Spectral Amplitude")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
-            .help("The input file to use (wav)")
-            .value_name("INPUT")
-            .required(true))
+                .help("The input file to use (wav)")
+                .value_name("INPUT")
+                .required(true))
 }
 
 fn main() -> Result<(), Error> {

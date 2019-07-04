@@ -1,11 +1,11 @@
-use sspse::window::WindowFunction;
 use sspse::ft;
+use sspse::window::WindowFunction;
 
+use clap::App;
+use gnuplot::{AutoOption, Axes2D, AxesCommon, Caption, Figure};
 use ndarray::Array1;
 use num::Complex;
 use rustfft::FFTplanner;
-use gnuplot::{Figure, Axes2D, AxesCommon, AutoOption, Caption};
-use clap::App;
 
 
 fn app() -> App<'static, 'static> {
