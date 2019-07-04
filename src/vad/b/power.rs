@@ -21,8 +21,8 @@ where
 {
     fn detect_into<D, B>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<B, Ix1>)
     where
-        D: Data<Elem=Complex<T>>,
-        B: DataMut<Elem=bool>,
+        D: Data<Elem = Complex<T>>,
+        B: DataMut<Elem = bool>,
     {
         azip!(mut decision (decision), spectrum (spectrum), floor (&self.floor) in {
             *decision = spectrum.norm_sqr() > floor * self.ratio;
@@ -36,8 +36,8 @@ where
 {
     fn detect_into<D, E>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
     where
-        D: Data<Elem=Complex<T>>,
-        E: DataMut<Elem=T>,
+        D: Data<Elem = Complex<T>>,
+        E: DataMut<Elem = T>,
     {
         azip!(mut decision (decision), spectrum (spectrum), floor (&self.floor) in {
             *decision = if spectrum.norm_sqr() > floor * self.ratio {
@@ -52,7 +52,7 @@ where
 pub fn noise_floor_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
 where
     T: Float + std::ops::AddAssign,
-    D: Data<Elem=Complex<T>>,
+    D: Data<Elem = Complex<T>>,
 {
     let mut out = Array1::zeros(spectrum.shape()[1]);
     noise_floor_est_into(spectrum, &mut out);
@@ -62,8 +62,8 @@ where
 pub fn noise_floor_est_into<T, D, M>(spectrum: &ArrayBase<D, Ix2>, out: &mut ArrayBase<M, Ix1>)
 where
     T: Float + std::ops::AddAssign,
-    D: Data<Elem=Complex<T>>,
-    M: DataMut<Elem=T>,
+    D: Data<Elem = Complex<T>>,
+    M: DataMut<Elem = T>,
 {
     let norm = T::from(spectrum.shape()[0]).unwrap();
 

@@ -1,10 +1,10 @@
-use std::io::{Read, Error as IoError, ErrorKind as IoErrorKind};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read};
 
-use hound::{WavReader, WavSamples, WavSpec, Sample as InputSample, Error, SampleFormat};
+use hound::{Error, Sample as InputSample, SampleFormat, WavReader, WavSamples, WavSpec};
 use ndarray::Array2;
 use num::traits::Zero;
 
-use sample::{Sample, FromSample, I24};
+use sample::{FromSample, Sample, I24};
 
 
 pub trait WavReaderExt<R> {
@@ -65,12 +65,8 @@ where
     {
         let spec = self.spec();
         let inner = match spec.sample_format {
-            hound::SampleFormat::Int => {
-                ConvertDynInner::Int(self.samples::<i32>())
-            },
-            hound::SampleFormat::Float => {
-                ConvertDynInner::Float(self.samples::<f32>())
-            },
+            hound::SampleFormat::Int   => ConvertDynInner::Int(self.samples::<i32>()),
+            hound::SampleFormat::Float => ConvertDynInner::Float(self.samples::<f32>()),
         };
 
         ConvertDyn {
@@ -124,7 +120,7 @@ where
 
         match (spec.sample_format, spec.bits_per_sample) {
             (SampleFormat::Float, 32) => self.collect_convert::<f32, T>(),
-            (SampleFormat::Int,    8) => self.collect_convert::<i8, T>(),
+            (SampleFormat::Int,    8) => self.collect_convert::< i8, T>(),
             (SampleFormat::Int,   16) => self.collect_convert::<i16, T>(),
             (SampleFormat::Int,   24) => self.collect_convert::<I24, T>(),
             (SampleFormat::Int,   32) => self.collect_convert::<i32, T>(),
@@ -176,14 +172,15 @@ impl RawSample for f32 {
     fn to_raw(&self) -> Self::Raw { *self }
 }
 
+pub trait FromSignedSample:
+    FromSample<i8> + FromSample<i16> + FromSample<I24> + FromSample<i32>
+{
+}
 
-pub trait FromSignedSample: FromSample<i8> + FromSample<i16> + FromSample<I24> + FromSample<i32> {}
-
-impl<T> FromSignedSample for T
-where
+impl<T> FromSignedSample for T where
     T: FromSample<i8> + FromSample<i16> + FromSample<I24> + FromSample<i32>
-{}
-
+{
+}
 
 
 pub struct Convert<'r, R, S, T>

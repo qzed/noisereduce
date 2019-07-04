@@ -1,7 +1,7 @@
 use crate::math::{bessel, NumCastUnchecked};
 
-use num::{Float, traits::FloatConst};
 use ndarray::Array1;
+use num::{traits::FloatConst, Float};
 
 
 #[allow(clippy::len_without_is_empty)]
@@ -10,7 +10,8 @@ pub trait WindowFunction<T> {
     fn coef(&self, index: usize) -> T;
 
     fn iter(&self) -> WindowFunctionIter<Self, T>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         WindowFunctionIter {
             function: self,
@@ -21,13 +22,15 @@ pub trait WindowFunction<T> {
     }
 
     fn to_array(&self) -> Array1<T>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         Array1::from_iter(self.iter())
     }
 
     fn with_len(self, len: usize) -> Self
-        where Self: Sized;
+    where
+        Self: Sized;
 }
 
 pub struct WindowFunctionIter<'a, T, F> {
@@ -104,7 +107,6 @@ where
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Rectangular<T> {
     len: usize,
@@ -130,7 +132,6 @@ impl<T: Float> WindowFunction<T> for Rectangular<T> {
         Rectangular { len, _p: std::marker::PhantomData }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Triangular<T> {
@@ -163,7 +164,6 @@ impl<T: Float> WindowFunction<T> for Triangular<T> {
         Triangular { len, l: self.l, _p: std::marker::PhantomData }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct GenericHann<T> {
@@ -337,14 +337,13 @@ impl<T: Float> WindowFunction<T> for Gaussian<T> {
         let i = T::from(index).unwrap();
 
         let a = (i - n_two) / (self.sigma * n_two);
-        T::exp(-(a*a) / two)
+        T::exp(-(a * a) / two)
     }
 
     fn with_len(self, len: usize) -> Self {
         Gaussian { len, sigma: self.sigma }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct GaussianConfined<T> {
@@ -376,12 +375,12 @@ impl<T: Float> WindowFunction<T> for GaussianConfined<T> {
         let i = T::from(index).unwrap();
         let n = T::from(self.len - 1).unwrap();
 
-        let f0 = g(i,                n, self.sigma_t);
-        let f1 = g(-a,               n, self.sigma_t);
+        let f0 = g(i, n, self.sigma_t);
+        let f1 = g(-a, n, self.sigma_t);
         let f2 = g(i + n + T::one(), n, self.sigma_t);
         let f3 = g(i - n - T::one(), n, self.sigma_t);
-        let f4 = g(a + n,            n, self.sigma_t);
-        let f5 = g(-b + n,           n, self.sigma_t);
+        let f4 = g(a + n, n, self.sigma_t);
+        let f5 = g(-b + n, n, self.sigma_t);
 
         f0 - (f1 * (f2 + f3)) / (f4 + f5)
     }
@@ -413,7 +412,7 @@ impl<T: Float> WindowFunction<T> for GeneralizedNormal<T> {
     fn coef(&self, index: usize) -> T {
         let i = T::from(index).unwrap();
         let n_two = T::from(self.len - 1).unwrap() / T::from(2.0).unwrap();
-        T::exp(- T::powf((i - n_two) / (self.sigma * n_two), self.p))
+        T::exp(-T::powf((i - n_two) / (self.sigma * n_two), self.p))
     }
 
     fn with_len(self, len: usize) -> Self {

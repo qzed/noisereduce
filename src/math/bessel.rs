@@ -1,4 +1,4 @@
-use super::{NumCastUnchecked};
+use super::NumCastUnchecked;
 
 use num::Float;
 

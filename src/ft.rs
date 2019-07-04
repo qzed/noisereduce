@@ -6,10 +6,10 @@ use crate::window::WindowFunction;
 
 use std::sync::Arc;
 
+use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
+use num::traits::{Float, NumAssign, Zero};
 use num::Complex;
-use num::traits::{Float, Zero, NumAssign};
-use ndarray::{s, ArrayBase, Array1, Array2, Axis, Ix1, Ix2, Data, DataMut};
-use rustfft::{FFT, FFTnum, FFTplanner};
+use rustfft::{FFTnum, FFTplanner, FFT};
 
 
 pub fn magnitude_to_db<F: Float>(m: F) -> F {
@@ -32,8 +32,13 @@ where
     M: DataMut<Elem = T>,
     T: Clone,
 {
-    output.slice_mut(s![0..input.len()/2]).assign(&input.slice(s![(input.len()+1)/2..]));
-    output.slice_mut(s![input.len()/2..]).assign(&input.slice(s![..(input.len()+1)/2]));
+    output
+        .slice_mut(s![0..input.len() / 2])
+        .assign(&input.slice(s![(input.len() + 1) / 2..]));
+
+    output
+        .slice_mut(s![input.len() / 2..])
+        .assign(&input.slice(s![..(input.len() + 1) / 2]));
 }
 
 pub fn ifftshift<D, T>(input: &ArrayBase<D, Ix1>) -> Array1<T>
@@ -52,8 +57,13 @@ where
     M: DataMut<Elem = T>,
     T: Clone,
 {
-    output.slice_mut(s![0..(input.len()+1)/2]).assign(&input.slice(s![input.len()/2..]));
-    output.slice_mut(s![(input.len()+1)/2..]).assign(&input.slice(s![..input.len()/2]));
+    output
+        .slice_mut(s![0..(input.len() + 1) / 2])
+        .assign(&input.slice(s![input.len() / 2..]));
+
+    output
+        .slice_mut(s![(input.len() + 1) / 2..])
+        .assign(&input.slice(s![..input.len() / 2]));
 }
 
 pub fn fftfreq<F: Float>(n: usize, sample_rate: F) -> Array1<F> {
@@ -70,15 +80,19 @@ where
     let center = (n - 1) / 2 + 1;
     let scale = sample_rate / F::from(n).unwrap();
 
-    output.slice_mut(s![..center]).assign(&Array1::range(F::zero(), F::from(center).unwrap(), F::one()));
-    output.slice_mut(s![center..]).assign(&Array1::range(-F::from(n / 2).unwrap(), F::zero(), F::one()));
+    let r1 = Array1::range(F::zero(), F::from(center).unwrap(), F::one());
+    output.slice_mut(s![..center]).assign(&r1);
+
+    let r2 = Array1::range(-F::from(n / 2).unwrap(), F::zero(), F::one());
+    output.slice_mut(s![center..]).assign(&r2);
+
     output.mapv_inplace(|v| v * scale);
 }
 
 pub fn stft_times<F>(input_len: usize, segment_len: usize, overlap: usize, padded: bool, sample_rate: F)
     -> Array1<F>
 where
-    F: Float
+    F: Float,
 {
     let step = segment_len - overlap;
     let len = (input_len - overlap) / step;
@@ -88,9 +102,14 @@ where
     output
 }
 
-pub fn stft_times_into<D, F>(input_len: usize, segment_len: usize, overlap: usize, padded: bool,
-                             sample_rate: F, output: &mut ArrayBase<D, Ix1>)
-where
+pub fn stft_times_into<D, F>(
+    input_len: usize,
+    segment_len: usize,
+    overlap: usize,
+    padded: bool,
+    sample_rate: F,
+    output: &mut ArrayBase<D, Ix1>,
+) where
     D: DataMut<Elem = F>,
     F: Float,
 {
@@ -99,12 +118,7 @@ where
 
     assert!(output.len() >= len);
 
-    let offs = if padded {
-        0
-    } else {
-        (segment_len - 1) / 2
-    };
-
+    let offs = if padded { 0 } else { (segment_len - 1) / 2 };
     for (i, v) in output.slice_mut(s![0..len]).indexed_iter_mut() {
         *v = F::from(i + offs).unwrap() * F::from(step).unwrap() / sample_rate;
     }
@@ -134,7 +148,8 @@ where
 {
     let mut output = Array2::zeros(spectrum.raw_dim());
     for i in 0..output.shape()[0] {
-        let magnitude = spectrum.index_axis(Axis(0), i)
+        let magnitude = spectrum
+            .index_axis(Axis(0), i)
             .mapv(|v| magnitude_to_db(v.norm()).max(min).min(max));
 
         fftshift_into(&magnitude, &mut output.index_axis_mut(Axis(0), i));
@@ -161,8 +176,8 @@ where
     F: Clone + Zero,
 {
     output.slice_mut(s![0..n]).fill(F::zero());
-    output.slice_mut(s![n..n+input.len()]).assign(&input);
-    output.slice_mut(s![n+input.len()..]).fill(F::zero());
+    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n + input.len()..]).fill(F::zero());
 }
 
 pub fn extend_const<D, F>(input: &ArrayBase<D, Ix1>, n: usize) -> Array1<F>
@@ -182,11 +197,11 @@ where
     F: Clone,
 {
     let a = input[0].clone();
-    let b = input[input.len()-1].clone();
+    let b = input[input.len() - 1].clone();
 
     output.slice_mut(s![0..n]).fill(a);
-    output.slice_mut(s![n..n+input.len()]).assign(&input);
-    output.slice_mut(s![n+input.len()..]).fill(b);
+    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n + input.len()..]).fill(b);
 }
 
 pub fn extend_even<D, F>(input: &ArrayBase<D, Ix1>, n: usize) -> Array1<F>
@@ -205,15 +220,19 @@ where
     M: DataMut<Elem = F>,
     F: Clone,
 {
-    output.slice_mut(s![0..n]).assign(&input.slice(s![1..=n; -1]));
-    output.slice_mut(s![n..n+input.len()]).assign(&input);
-    output.slice_mut(s![n+input.len()..]).assign(&input.slice(s![input.len()-n-1..input.len()-1; -1]));
+    output
+        .slice_mut(s![0..n])
+        .assign(&input.slice(s![1..=n; -1]));
+    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output
+        .slice_mut(s![n + input.len()..])
+        .assign(&input.slice(s![input.len()-n-1..input.len()-1; -1]));
 }
 
 pub fn extend_odd<D, F>(input: &ArrayBase<D, Ix1>, n: usize) -> Array1<F>
 where
     D: Data<Elem = F>,
-    F: Clone + Zero + std::ops::Add<Output=F> + std::ops::SubAssign,
+    F: Clone + Zero + std::ops::Add<Output = F> + std::ops::SubAssign,
 {
     let mut result = Array1::zeros(input.len() + 2 * n);
     extend_odd_into(n, input, &mut result);
@@ -224,18 +243,18 @@ pub fn extend_odd_into<D, M, F>(n: usize, input: &ArrayBase<D, Ix1>, output: &mu
 where
     D: Data<Elem = F>,
     M: DataMut<Elem = F>,
-    F: Clone + std::ops::Add<Output=F> + std::ops::SubAssign,
+    F: Clone + std::ops::Add<Output = F> + std::ops::SubAssign,
 {
     let a = input[0].clone() + input[0].clone();
-    let b = input[input.len()-1].clone() + input[input.len()-1].clone();
+    let b = input[input.len() - 1].clone() + input[input.len() - 1].clone();
 
     let mut ext_a = output.slice_mut(s![0..n]);
     ext_a.fill(a);
     ext_a -= &input.slice(s![1..=n; -1]);
 
-    output.slice_mut(s![n..n+input.len()]).assign(&input);
+    output.slice_mut(s![n..n + input.len()]).assign(&input);
 
-    let mut ext_b = output.slice_mut(s![n+input.len()..]);
+    let mut ext_b = output.slice_mut(s![n + input.len()..]);
     ext_b.fill(b);
     ext_b -= &input.slice(s![input.len()-n-1..input.len()-1; -1]);
 }
@@ -310,15 +329,15 @@ pub enum Padding {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InversionMethod {
-    Basic,      // overlap-add
-    Weighted,   // weighted overlap-add
+    Basic,    // overlap-add
+    Weighted, // weighted overlap-add
 }
 
 
 pub struct StftBuilder<T> {
-    fft:     Arc<dyn FFT<T>>,
+    fft: Arc<dyn FFT<T>>,
     padding: Padding,
-    window:  Array1<T>,
+    window: Array1<T>,
     overlap: Option<usize>,
     shifted: bool,
 }
@@ -329,26 +348,26 @@ where
 {
     pub fn new<W>(window: &W) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         Self::with_fft(window, FFTplanner::new(false).plan_fft(fft_len))
     }
 
     pub fn with_fft<W>(window: &W, fft: Arc<dyn FFT<T>>) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         StftBuilder {
             fft,
             padding: Padding::Zero,
-            window:  window.to_array(),
+            window: window.to_array(),
             overlap: None,
             shifted: false,
         }
@@ -378,29 +397,31 @@ where
         assert!(len_fft >= len_segment);
 
         Stft {
-            fft:      self.fft,
-            window:   self.window,
-            padding:  self.padding,
-            shifted:  self.shifted,
-            buf_in:   Array1::zeros(len_fft),
-            buf_out:  Array1::zeros(len_fft),
-            buf_pad:  Vec::new(),
-            len_fft, len_segment, len_overlap
+            fft: self.fft,
+            window: self.window,
+            padding: self.padding,
+            shifted: self.shifted,
+            buf_in: Array1::zeros(len_fft),
+            buf_out: Array1::zeros(len_fft),
+            buf_pad: Vec::new(),
+            len_fft,
+            len_segment,
+            len_overlap,
         }
     }
 }
 
 pub struct Stft<T> {
-    fft:         Arc<dyn FFT<T>>,
-    len_fft:     usize,
+    fft: Arc<dyn FFT<T>>,
+    len_fft: usize,
     len_overlap: usize,
     len_segment: usize,
-    shifted:     bool,
-    window:      Array1<T>,
-    padding:     Padding,
-    buf_in:      Array1<Complex<T>>,
-    buf_out:     Array1<Complex<T>>,
-    buf_pad:     Vec<Complex<T>>,
+    shifted: bool,
+    window: Array1<T>,
+    padding: Padding,
+    buf_in: Array1<Complex<T>>,
+    buf_out: Array1<Complex<T>>,
+    buf_pad: Vec<Complex<T>>,
 }
 
 impl<T> Stft<T>
@@ -430,7 +451,13 @@ where
     }
 
     pub fn spectrum_times<F: Float>(&self, input_len: usize, sample_rate: F) -> Array1<F> {
-        stft_times(input_len, self.len_segment, self.len_overlap, self.padding != Padding::None, sample_rate)
+        stft_times(
+            input_len,
+            self.len_segment,
+            self.len_overlap,
+            self.padding != Padding::None,
+            sample_rate,
+        )
     }
 
     pub fn spectrum_freqs<F: Float>(&self, sample_rate: F) -> Array1<F> {
@@ -469,10 +496,10 @@ where
             let mut padded = ndarray::aview_mut1(&mut self.buf_pad[..]);
 
             match self.padding {
-                Padding::None  => unreachable!(),
-                Padding::Zero  => extend_zero_into(self.len_segment / 2, input, &mut padded),
-                Padding::Even  => extend_even_into(self.len_segment / 2, input, &mut padded),
-                Padding::Odd   => extend_odd_into(self.len_segment / 2, input, &mut padded),
+                Padding::None => unreachable!(),
+                Padding::Zero => extend_zero_into(self.len_segment / 2, input, &mut padded),
+                Padding::Even => extend_even_into(self.len_segment / 2, input, &mut padded),
+                Padding::Odd => extend_odd_into(self.len_segment / 2, input, &mut padded),
                 Padding::Const => extend_const_into(self.len_segment / 2, input, &mut padded),
             };
 
@@ -491,16 +518,21 @@ where
             for j in 0..self.len_segment {
                 self.buf_in[s + j] = input_padded[k + j] * self.window[j];
             }
-            for j in s+self.len_segment..self.len_fft {
+            for j in s + self.len_segment..self.len_fft {
                 self.buf_in[j] = Complex::zero();
             }
 
             // fft
-            self.fft.process(self.buf_in.as_slice_mut().unwrap(), self.buf_out.as_slice_mut().unwrap());
+            self.fft.process(
+                self.buf_in.as_slice_mut().unwrap(),
+                self.buf_out.as_slice_mut().unwrap(),
+            );
 
             // copy to output segment
             if !self.shifted {
-                output.slice_mut(s![i, 0..self.len_fft]).assign(&self.buf_out);
+                output
+                    .slice_mut(s![i, 0..self.len_fft])
+                    .assign(&self.buf_out);
             } else {
                 fftshift_into(&self.buf_out, &mut output.slice_mut(s![i, 0..self.len_fft]));
             }
@@ -508,13 +540,12 @@ where
     }
 }
 
-
 pub struct IstftBuilder<T> {
-    ifft:           Arc<dyn FFT<T>>,
-    method:         InversionMethod,
+    ifft: Arc<dyn FFT<T>>,
+    method: InversionMethod,
     remove_padding: bool,
-    window:         Array1<T>,
-    overlap:        Option<usize>,
+    window: Array1<T>,
+    overlap: Option<usize>,
 }
 
 impl<T> IstftBuilder<T>
@@ -523,28 +554,28 @@ where
 {
     pub fn new<W>(window: &W) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         Self::with_ifft(window, FFTplanner::new(true).plan_fft(fft_len))
     }
 
     pub fn with_ifft<W>(window: &W, ifft: Arc<dyn FFT<T>>) -> Self
     where
-        W: WindowFunction<T>
+        W: WindowFunction<T>,
     {
         IstftBuilder {
             ifft,
-            method:         InversionMethod::Weighted,
+            method: InversionMethod::Weighted,
             remove_padding: true,
-            window:         window.to_array(),
-            overlap:        None,
+            window: window.to_array(),
+            overlap: None,
         }
     }
 
@@ -572,31 +603,33 @@ where
         assert!(len_fft >= len_segment);
 
         Istft {
-            ifft:           self.ifft,
-            method:         self.method,
-            window:         self.window,
+            ifft: self.ifft,
+            method: self.method,
+            window: self.window,
             remove_padding: self.remove_padding,
-            buf_in:         Array1::zeros(len_fft),
-            buf_out:        Array1::zeros(len_fft),
-            buf_acc:        Vec::new(),
-            buf_norm:       Vec::new(),
-            len_fft, len_segment, len_overlap
+            buf_in: Array1::zeros(len_fft),
+            buf_out: Array1::zeros(len_fft),
+            buf_acc: Vec::new(),
+            buf_norm: Vec::new(),
+            len_fft,
+            len_segment,
+            len_overlap,
         }
     }
 }
 
 pub struct Istft<T> {
-    ifft:           Arc<dyn FFT<T>>,
-    method:         InversionMethod,
-    len_fft:        usize,
-    len_overlap:    usize,
-    len_segment:    usize,
-    window:         Array1<T>,
+    ifft: Arc<dyn FFT<T>>,
+    method: InversionMethod,
+    len_fft: usize,
+    len_overlap: usize,
+    len_segment: usize,
+    window: Array1<T>,
     remove_padding: bool,
-    buf_in:         Array1<Complex<T>>,
-    buf_out:        Array1<Complex<T>>,
-    buf_acc:        Vec<Complex<T>>,
-    buf_norm:       Vec<T>,
+    buf_in: Array1<Complex<T>>,
+    buf_out: Array1<Complex<T>>,
+    buf_acc: Vec<Complex<T>>,
+    buf_norm: Vec<T>,
 }
 
 impl<T> Istft<T>
@@ -626,9 +659,7 @@ where
         }
     }
 
-    pub fn sample_times<F: Float>(&self, len_spectrum: usize, sample_rate: F)
-        -> Array1<F>
-    {
+    pub fn sample_times<F: Float>(&self, len_spectrum: usize, sample_rate: F) -> Array1<F> {
         sample_times(self.len_output(len_spectrum), sample_rate)
     }
 
@@ -641,8 +672,11 @@ where
         output
     }
 
-    pub fn process_into<'a, 'b, D, M>(&mut self, input: &ArrayBase<D, Ix2>, output: &'a mut ArrayBase<M, Ix1>)
-    where
+    pub fn process_into<'a, 'b, D, M>(
+        &mut self,
+        input: &ArrayBase<D, Ix2>,
+        output: &'a mut ArrayBase<M, Ix1>,
+    ) where
         D: Data<Elem = Complex<T>>,
         M: DataMut<Elem = Complex<T>> + 'a,
     {
@@ -652,7 +686,10 @@ where
         let len_padded = self.len_segment + (len_spectrum - 1) * step;
 
         let (len_unpadded, offset_padding) = if self.remove_padding {
-            (len_padded - (self.len_segment / 2) * 2, self.len_segment / 2)
+            (
+                len_padded - (self.len_segment / 2) * 2,
+                self.len_segment / 2,
+            )
         } else {
             (len_padded, 0)
         };
@@ -675,14 +712,21 @@ where
             self.buf_in.assign(&input.index_axis(Axis(0), i));
 
             // TODO: this needs to be inverse -> split into two structs
-            self.ifft.process(self.buf_in.as_slice_mut().unwrap(), self.buf_out.as_slice_mut().unwrap());
+            self.ifft.process(
+                self.buf_in.as_slice_mut().unwrap(),
+                self.buf_out.as_slice_mut().unwrap(),
+            );
 
             // handle fft and segment length difference (remove padding)
             let s = (self.len_fft - self.len_segment) / 2;
 
             // (weighted) overlap+add (+ fft normalization)
-            for (j, v) in self.buf_out.slice(s![s..s+self.len_segment]).indexed_iter() {
-                self.buf_acc[i * step + j]  += v * self.window[j].powi(a);
+            for (j, v) in self
+                .buf_out
+                .slice(s![s..s + self.len_segment])
+                .indexed_iter()
+            {
+                self.buf_acc[i * step + j] += v * self.window[j].powi(a);
                 self.buf_norm[i * step + j] += self.window[j].powi(a + 1);
             }
         }
@@ -730,17 +774,21 @@ where
     let two = F::from(2.0).unwrap();
     let n = input_len.min(output_len);
 
-    output.slice_mut(s![..n/2]).assign(&input.slice(s![..n/2]));
-    output.slice_mut(s![output_len-n/2..]).assign(&input.slice(s![input_len-n/2..]));
+    output.slice_mut(s![..n / 2]).assign(&input.slice(s![..n / 2]));
+    output.slice_mut(s![output_len - n / 2..]).assign(&input.slice(s![input_len - n / 2..]));
 
-    if output_len < input_len {                                 // downsampling
-        if output_len % 2 == 1 {                                // handle odd target center
-            output[n/2+1] = (input[n/2+1] + input[input_len - (n/2+1)]) / two;
+    if output_len < input_len {
+        // downsampling
+        if output_len % 2 == 1 {
+            // handle odd target center
+            output[n / 2 + 1] = (input[n / 2 + 1] + input[input_len - (n / 2 + 1)]) / two;
         }
-    } else if output_len > input_len {                          // upsampling
-        if input_len % 2 == 1 {                                 // handle odd source center
-            output[n/2+1] = input[n/2+1] / two;
-            output[output_len - (n/2+1)] = input[n/2+1] / two;
+    } else if output_len > input_len {
+        // upsampling
+        if input_len % 2 == 1 {
+            // handle odd source center
+            output[n / 2 + 1] = input[n / 2 + 1] / two;
+            output[output_len - (n / 2 + 1)] = input[n / 2 + 1] / two;
         }
     }
 }

@@ -1,11 +1,11 @@
 //! Full-Spectrum Voice activity detection.
 
+pub mod energy;
+
 use crate::vad;
 
 use ndarray::{ArrayBase, Data, DataMut, Ix1};
 use num::{Complex, Float};
-
-pub mod energy;
 
 
 /// Voice activity detector with boolean output.
@@ -14,11 +14,11 @@ pub trait VoiceActivityDetector<T> {
     /// spectrum, `false` otherwise.
     fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> bool
     where
-        D: Data<Elem=Complex<T>>;
-    
+        D: Data<Elem = Complex<T>>;
+
     fn per_band(self) -> PerBand<Self>
     where
-        Self: Sized
+        Self: Sized,
     {
         PerBand { base: self }
     }
@@ -33,21 +33,21 @@ where
     /// absence (`0.0`) of voice in the given spectrum.
     fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> T
     where
-        D: Data<Elem=Complex<T>>;
+        D: Data<Elem = Complex<T>>;
 
     /// Transforms this detector into a binary/boolean detector where any voice
     /// presence probability returned by the original detector that is above the
     /// given threshold is interpreted as present (`true`).
     fn binary(self, threshold: T) -> Binary<Self, T>
     where
-        Self: Sized
+        Self: Sized,
     {
         Binary { base: self, threshold }
     }
 
     fn per_band(self) -> PerBand<Self>
     where
-        Self: Sized
+        Self: Sized,
     {
         PerBand { base: self }
     }
@@ -61,7 +61,7 @@ where
 {
     fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> T
     where
-        D: Data<Elem=Complex<T>>
+        D: Data<Elem = Complex<T>>,
     {
         if VoiceActivityDetector::detect(self, spectrum) {
             T::one()
@@ -87,7 +87,7 @@ where
 {
     fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> bool
     where
-        D: Data<Elem=Complex<T>>,
+        D: Data<Elem = Complex<T>>,
     {
         self.base.detect(spectrum) > self.threshold
     }
@@ -98,7 +98,6 @@ pub struct PerBand<B> {
     base: B,
 }
 
-
 impl<B, T> vad::b::VoiceActivityDetector<T> for PerBand<B>
 where
     B: VoiceActivityDetector<T>,
@@ -106,8 +105,8 @@ where
 {
     fn detect_into<D, E>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
     where
-        D: Data<Elem=Complex<T>>,
-        E: DataMut<Elem=bool>,
+        D: Data<Elem = Complex<T>>,
+        E: DataMut<Elem = bool>,
     {
         decision.fill(self.base.detect(spectrum))
     }
@@ -120,8 +119,8 @@ where
 {
     fn detect_into<D, E>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
     where
-        D: Data<Elem=Complex<T>>,
-        E: DataMut<Elem=T>,
+        D: Data<Elem = Complex<T>>,
+        E: DataMut<Elem = T>,
     {
         decision.fill(self.base.detect(spectrum))
     }
