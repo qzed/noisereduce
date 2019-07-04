@@ -1,7 +1,8 @@
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
-use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
+use sspse::vad::b::{power, VoiceActivityDetector as _, power::PowerThresholdVad};
+// use sspse::vad::f::{energy, VoiceActivityDetector as _, energy::EnergyThresholdVad};
 use sspse::math::{bessel, expint, NumCastUnchecked};
 
 use hound::{WavReader, Error};
@@ -42,11 +43,15 @@ where
     D3: Data<Elem=T>,
     Do: DataMut<Elem=T>,
 {
+    let nu_min = T::from(1e-50).unwrap();
+    let nu_max = T::from(500.0).unwrap();
+
     let half = T::from(0.5).unwrap();
     let fspi2 = T::PI().sqrt() * half;
 
     azip!(mut gain (gain), yk (y_spec), xi (xi), gamma (gamma) in {
         let nu = xi / (T::one() + xi) * gamma;
+        let nu = nu.max(nu_min).min(nu_max);        // prevent over/underflows
 
         *gain = fspi2
             * (T::sqrt(nu) * T::exp(-nu * half) / gamma)
@@ -162,8 +167,11 @@ fn main() -> Result<(), Error> {
     // initial noise estimate
     let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..]));
 
-    let noise_floor = vad::energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
-    let vad = EnergyThresholdVad::new(noise_floor, 1.3);
+    let noise_floor = power::noise_floor_est(&spectrum.slice(s![..3, ..]));
+    let vad = PowerThresholdVad::new(noise_floor, 1.3);
+
+    // let noise_floor = energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
+    // let vad = EnergyThresholdVad::new(noise_floor, 1.3).per_band();
 
     // set parameters
     let alpha = 0.98;
@@ -180,10 +188,13 @@ fn main() -> Result<(), Error> {
         let mut yk = spectrum.index_axis_mut(Axis(0), i);
 
         // update noise estimate
-        if !vad.detect(&yk) {
-            let a = 0.5;
-            lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr());
-        }
+        let vad = vad.detect(&yk);
+        azip!(mut lambda_d, vad, yk in {
+            if !vad {
+                let a = 0.5;
+                *lambda_d = a * *lambda_d + (1.0 - a) * yk.norm_sqr();
+            }
+        });
 
         // calculate gain function
         if logmmse {
