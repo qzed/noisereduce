@@ -2,11 +2,11 @@ use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::ft;
 use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
-use sspse::math::{bessel, expint};
+use sspse::math::{bessel, expint, NumCastUnchecked};
 
 use hound::{WavReader, Error};
 use num::{Complex, Float, traits::FloatConst};
-use ndarray::{s, azip, Array1, Axis, ArrayBase, Data, Ix2};
+use ndarray::{s, azip, Array1, Axis, ArrayBase, Data, DataMut, Ix1, Ix2};
 use gnuplot::{Figure, AxesCommon, AutoOption};
 
 
@@ -26,7 +26,58 @@ use gnuplot::{Figure, AxesCommon, AutoOption};
 //   - param: xi_k, gamma_k, Y_k
 //
 // - log-MMSE
-//   - param: xi_k, gamma_k, Y_k
+//   - param: xi_k, gamma_k
+
+
+fn gain_mmse<T, D1, D2, D3, Do>(
+    y_spec: &ArrayBase<D1, Ix1>,
+    xi: &ArrayBase<D2, Ix1>,
+    gamma: &ArrayBase<D3, Ix1>,
+    gain: &mut ArrayBase<Do, Ix1>)
+where
+    T: Float + FloatConst + NumCastUnchecked,
+    D1: Data<Elem=Complex<T>>,
+    D2: Data<Elem=T>,
+    D3: Data<Elem=T>,
+    Do: DataMut<Elem=T>,
+{
+    let half = T::from(0.5).unwrap();
+    let fspi2 = T::PI().sqrt() * half;
+
+    azip!(mut gain (gain), yk (y_spec), xi (xi), gamma (gamma) in {
+        let nu = xi / (T::one() + xi) * gamma;
+
+        *gain = fspi2
+            * (T::sqrt(nu) * T::exp(-nu * half) / gamma)
+            * ((T::one() + nu) * bessel::I0(nu * half) + nu * bessel::I1(nu * half))
+            * yk.norm();
+    });
+}
+
+fn gain_logmmse<T, D1, D2, D3, Do>(
+    _y_spec: &ArrayBase<D1, Ix1>,
+    xi: &ArrayBase<D2, Ix1>,
+    gamma: &ArrayBase<D3, Ix1>,
+    gain: &mut ArrayBase<Do, Ix1>)
+where
+    T: Float + FloatConst + NumCastUnchecked,
+    D1: Data<Elem=Complex<T>>,
+    D2: Data<Elem=T>,
+    D3: Data<Elem=T>,
+    Do: DataMut<Elem=T>,
+{
+    let nu_min = T::from(1e-50).unwrap();
+    let nu_max = T::from(500.0).unwrap();
+
+    let half = T::from(0.5).unwrap();
+
+    azip!(mut gain (gain), xi (xi), gamma (gamma) in {
+        let nu = xi / (T::one() + xi) * gamma;
+        let nu = nu.max(nu_min).min(nu_max);        // prevent over/underflows
+
+        *gain = (xi / (T::one() + xi)) * T::exp(-half * expint::Ei(-nu));
+    });
+}
 
 
 pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
@@ -48,6 +99,8 @@ where
 fn main() -> Result<(), Error> {
     let path_in = std::env::args_os().nth(1).expect("missing input file argument");
     let path_out = std::env::args_os().nth(2).expect("missing output file argument");
+
+    let logmmse = true;
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
@@ -108,23 +161,12 @@ fn main() -> Result<(), Error> {
             lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr());
         }
 
-        fn frac_sqrt_pi_2<T: Float + FloatConst>() -> T {
-            T::PI().sqrt() / T::from(2.0).unwrap()
-        }
-
         // calculate gain function
-        let g: f64 = frac_sqrt_pi_2();
-
-        let nu = xi.mapv(|v| v / (1.0 + v)) * &gamma;
-
-        let t1 = nu.mapv(|v| v.sqrt() * (-v / 2.0).exp()) / &gamma;
-        let t2 = nu.mapv(|v| (1.0 + v) * bessel::I0(v / 2.0) + v * bessel::I1(v / 2.0));
-
-        gain.assign(&(g * t1 * t2 * yk.mapv(|v| v.norm())));
-
-        // let nu = &xi / &(1.0 + &xi) * &gamma;
-        // let nu = nu.mapv_into(|v| v.max(1e-50).min(500.0));     // prevent over/underflows
-        // gain.assign(&(&xi / &(1.0 + &xi) * nu.mapv_into(|v| (-0.5 * expint::Ei(-v)).exp())));
+        if logmmse {
+            gain_logmmse(&yk, &xi, &gamma, &mut gain);
+        } else {
+            gain_mmse(&yk, &xi, &gamma, &mut gain);
+        }
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
