@@ -1,17 +1,17 @@
 use sspse::window;
 use sspse::window::WindowFunction;
 
-use gnuplot::Axes2D;
+use gnuplot::{Axes2D, AxesCommon, AutoOption, Figure};
+use clap::App;
 
 
-fn plot<W: WindowFunction<f64>>(ax: &mut Axes2D, window: W, name: &'static str) {
-    let buf: Vec<f64> = window.iter().collect();
-    ax.lines(0..window.len(), buf, &[gnuplot::Caption(name)]);
+fn app() -> App<'static, 'static> {
+    App::new("Example: Plot various Window Functions")
+        .author(clap::crate_authors!())
 }
 
-
 fn main() {
-    use gnuplot::{Figure, AxesCommon, AutoOption};
+    app().get_matches();
 
     let len = 129;
 
@@ -36,4 +36,9 @@ fn main() {
     plot(&mut ax, window::kaiser(len, 8.0), "Kaiser (pa=8)");
 
     fig.show();
+}
+
+fn plot<W: WindowFunction<f64>>(ax: &mut Axes2D, window: W, name: &'static str) {
+    let buf: Vec<f64> = window.iter().collect();
+    ax.lines(0..window.len(), buf, &[gnuplot::Caption(name)]);
 }

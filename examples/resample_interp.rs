@@ -2,13 +2,34 @@ use sspse::wave::WavReaderExt;
 
 use hound::{WavReader, WavWriter, WavSpec, SampleFormat, Error};
 use sample::Signal;
+use clap::{value_t_or_exit, App, Arg};
 
+
+fn app() -> App<'static, 'static> {
+    App::new("Example: Re-sample Audio Signal using Sinc Interpolation")
+        .author(clap::crate_authors!())
+        .arg(Arg::with_name("input")
+            .help("The input file to use (wav)")
+            .value_name("INPUT")
+            .required(true))
+        .arg(Arg::with_name("output")
+            .help("The file to write the result to (wav)")
+            .value_name("OUTPUT")
+            .required(true))
+        .arg(Arg::with_name("samplerate")
+            .help("The target sample-rate")
+            .short("r")
+            .long("sample-rate")
+            .takes_value(true)
+            .default_value("24000"))
+}
 
 fn main() -> Result<(), Error> {
-    let path_in = std::env::args_os().nth(1).expect("missing input file argument");
-    let path_out = std::env::args_os().nth(2).expect("missing output file argument");
+    let matches = app().get_matches();
 
-    let target_sample_rate = 8_000;
+    let path_in = matches.value_of_os("input").unwrap();
+    let path_out = matches.value_of_os("output").unwrap();
+    let target_sample_rate = value_t_or_exit!(matches, "samplerate", u32);
 
     // load wave file and extract first channel
     let mut reader = WavReader::open(path_in)?;

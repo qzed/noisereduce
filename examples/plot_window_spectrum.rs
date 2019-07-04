@@ -5,7 +5,30 @@ use ndarray::Array1;
 use num::Complex;
 use rustfft::FFTplanner;
 use gnuplot::{Figure, Axes2D, AxesCommon, AutoOption, Caption};
+use clap::App;
 
+
+fn app() -> App<'static, 'static> {
+    App::new("Example: Plot Spectras of various Window Functions")
+        .author(clap::crate_authors!())
+}
+
+fn main() {
+    app().get_matches();
+
+    let len = 1023;
+
+    let mut fig = Figure::new();
+    let mut ax = fig.axes2d();
+    ax.set_x_range(AutoOption::Fix(0.0), AutoOption::Fix(len as f64 - 1.0));
+    plot_spectrum(&mut ax, sspse::window::rectangular(len), "Rectangular");
+    plot_spectrum(&mut ax, sspse::window::bartlett(len), "Bartlett");
+    plot_spectrum(&mut ax, sspse::window::hann(len), "Hann");
+    plot_spectrum(&mut ax, sspse::window::hamming(len), "Hamming");
+    plot_spectrum(&mut ax, sspse::window::blackman_nuttall(len), "Blackman-Nuttall");
+    plot_spectrum(&mut ax, sspse::window::blackman_harris(len), "Blackman-Harris");
+    fig.show();
+}
 
 fn plot_spectrum<W>(ax: &mut Axes2D, window: W, name: &'static str)
 where
@@ -35,20 +58,4 @@ where
     let freq = ft::fftshift(&freq);
 
     ax.lines(0..freq.len(), freq.iter(), &[Caption(name)]);
-}
-
-
-fn main() {
-    let len = 1023;
-
-    let mut fig = Figure::new();
-    let mut ax = fig.axes2d();
-    ax.set_x_range(AutoOption::Fix(0.0), AutoOption::Fix(len as f64 - 1.0));
-    plot_spectrum(&mut ax, sspse::window::rectangular(len), "Rectangular");
-    plot_spectrum(&mut ax, sspse::window::bartlett(len), "Bartlett");
-    plot_spectrum(&mut ax, sspse::window::hann(len), "Hann");
-    plot_spectrum(&mut ax, sspse::window::hamming(len), "Hamming");
-    plot_spectrum(&mut ax, sspse::window::blackman_nuttall(len), "Blackman-Nuttall");
-    plot_spectrum(&mut ax, sspse::window::blackman_harris(len), "Blackman-Harris");
-    fig.show();
 }

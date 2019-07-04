@@ -8,6 +8,7 @@ use hound::{WavReader, Error};
 use num::{Complex, Float, traits::FloatConst};
 use ndarray::{s, azip, Array1, Axis, ArrayBase, Data, DataMut, Ix1, Ix2};
 use gnuplot::{Figure, AxesCommon, AutoOption};
+use clap::{App, Arg};
 
 
 // SNR estimation:
@@ -96,11 +97,34 @@ where
 }
 
 
-fn main() -> Result<(), Error> {
-    let path_in = std::env::args_os().nth(1).expect("missing input file argument");
-    let path_out = std::env::args_os().nth(2).expect("missing output file argument");
+fn app() -> App<'static, 'static> {
+    App::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
+        .author(clap::crate_authors!())
+        .arg(Arg::with_name("input")
+            .help("The input file to use (wav)")
+            .value_name("INPUT")
+            .required(true))
+        .arg(Arg::with_name("output")
+            .help("The file to write the result to (wav)")
+            .value_name("OUTPUT")
+            .required(false))
+        .arg(Arg::with_name("plot")
+            .help("Wheter to plot the results or not")
+            .short("p")
+            .long("plot"))
+        .arg(Arg::with_name("log_mmse")
+            .help("Use log-MMSE instead of plain MMSE")
+            .short("l")
+            .long("log-mmse"))
+}
 
-    let logmmse = true;
+fn main() -> Result<(), Error> {
+    let matches = app().get_matches();
+
+    let path_in = matches.value_of_os("input").unwrap();
+    let path_out = matches.value_of_os("output");
+    let plot = matches.is_present("plot");
+    let logmmse = matches.is_present("log_mmse");
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
@@ -190,49 +214,53 @@ fn main() -> Result<(), Error> {
     let out = out.mapv(|v| v.re as f32);
 
     // write
-    let out_spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: samples_spec.sample_rate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Float,
-    };
+    if let Some(path_out) = path_out {
+        let out_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: samples_spec.sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
 
-    let mut writer = hound::WavWriter::create(path_out, out_spec)?;
-    for x in out.iter() {
-        writer.write_sample(*x)?;
+        let mut writer = hound::WavWriter::create(path_out, out_spec)?;
+        for x in out.iter() {
+            writer.write_sample(*x)?;
+        }
+        writer.finalize()?;
     }
-    writer.finalize()?;
 
     // plot
-    let fftfreq = ft::fftshift(&stft.spectrum_freqs(samples_spec.sample_rate as f64));
-    let f0 = fftfreq[0];
-    let f1 = fftfreq[fftfreq.len() - 1];
+    if plot {
+        let fftfreq = ft::fftshift(&stft.spectrum_freqs(samples_spec.sample_rate as f64));
+        let f0 = fftfreq[0];
+        let f1 = fftfreq[fftfreq.len() - 1];
 
-    let times = stft.spectrum_times(samples.len(), samples_spec.sample_rate as f64);
-    let t0 = times[0];
-    let t1 = times[times.len() - 1];
+        let times = stft.spectrum_times(samples.len(), samples_spec.sample_rate as f64);
+        let t0 = times[0];
+        let t1 = times[times.len() - 1];
 
-    // plot original spectrum
-    let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
+        // plot original spectrum
+        let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
 
-    let mut fig = Figure::new();
-    let ax = fig.axes2d();
-    ax.set_palette(gnuplot::HELIX);
-    ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
-    ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
-    ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-    fig.show();
+        let mut fig = Figure::new();
+        let ax = fig.axes2d();
+        ax.set_palette(gnuplot::HELIX);
+        ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
+        ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
+        ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
+        fig.show();
 
-    // plot modified spectrum
-    let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
+        // plot modified spectrum
+        let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
 
-    let mut fig = Figure::new();
-    let ax = fig.axes2d();
-    ax.set_palette(gnuplot::HELIX);
-    ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
-    ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
-    ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-    fig.show();
+        let mut fig = Figure::new();
+        let ax = fig.axes2d();
+        ax.set_palette(gnuplot::HELIX);
+        ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
+        ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
+        ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
+        fig.show();
+    }
 
     Ok(())
 }

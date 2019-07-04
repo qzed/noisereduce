@@ -6,11 +6,32 @@ use hound::{WavReader, Error};
 use num::Complex;
 use ndarray::Axis;
 use gnuplot::Figure;
+use clap::{App, Arg};
 
+
+fn app() -> App<'static, 'static> {
+    App::new("Example: Forward and Inverse Short-Time Fourier Transform")
+        .author(clap::crate_authors!())
+        .arg(Arg::with_name("input")
+            .help("The input file to use (wav)")
+            .value_name("INPUT")
+            .required(true))
+        .arg(Arg::with_name("output")
+            .help("The file to write the result to (wav)")
+            .value_name("OUTPUT")
+            .required(false))
+        .arg(Arg::with_name("plot")
+            .help("Wheter to plot the results or not")
+            .short("p")
+            .long("plot"))
+}
 
 fn main() -> Result<(), Error> {
-    let path_in = std::env::args_os().nth(1).expect("missing input file argument");
-    let path_out = std::env::args_os().nth(2).expect("missing output file argument");
+    let matches = app().get_matches();
+
+    let path_in = matches.value_of_os("input").unwrap();
+    let path_out = matches.value_of_os("output");
+    let plot = matches.is_present("plot");
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f32>()?;
@@ -35,7 +56,7 @@ fn main() -> Result<(), Error> {
         .overlap(overlap)
         .padding(ft::Padding::Zero)
         .build();
-    
+
     let mut istft = ft::IstftBuilder::with_len(&window, fft_len)
         .overlap(overlap)
         .method(ft::InversionMethod::Weighted)
@@ -49,28 +70,32 @@ fn main() -> Result<(), Error> {
     let out = out.mapv(|v| v.re);
 
     // plot
-    let tx_s = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
-    let tx_o = ft::sample_times(out.len(), samples_spec.sample_rate as f64);
+    if plot {
+        let tx_s = ft::sample_times(samples.len(), samples_spec.sample_rate as f64);
+        let tx_o = ft::sample_times(out.len(), samples_spec.sample_rate as f64);
 
-    let mut fig = Figure::new();
-    let ax = fig.axes2d();
-    ax.lines(tx_s.iter(), samples.iter(), &[]);
-    ax.lines(tx_o.iter(), out.iter(), &[]);
-    fig.show();
+        let mut fig = Figure::new();
+        let ax = fig.axes2d();
+        ax.lines(tx_s.iter(), samples.iter(), &[]);
+        ax.lines(tx_o.iter(), out.iter(), &[]);
+        fig.show();
+    }
 
     // write
-    let out_spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: samples_spec.sample_rate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Float,
-    };
+    if let Some(path_out) = path_out {
+        let out_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: samples_spec.sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
 
-    let mut writer = hound::WavWriter::create(path_out, out_spec)?;
-    for x in out.iter() {
-        writer.write_sample(*x)?;
+        let mut writer = hound::WavWriter::create(path_out, out_spec)?;
+        for x in out.iter() {
+            writer.write_sample(*x)?;
+        }
+        writer.finalize()?;
     }
-    writer.finalize()?;
 
     Ok(())
 }

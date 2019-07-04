@@ -5,13 +5,24 @@ use hound::{WavReader, Error};
 use num::Complex;
 use ndarray::{Axis};
 use gnuplot::{Figure, AxesCommon, AutoOption};
+use clap::{App, Arg};
 
+
+fn app() -> App<'static, 'static> {
+    App::new("Example: Compute and Plot Short-Time Spectral Amplitude")
+        .author(clap::crate_authors!())
+        .arg(Arg::with_name("input")
+            .help("The input file to use (wav)")
+            .value_name("INPUT")
+            .required(true))
+}
 
 fn main() -> Result<(), Error> {
-    let path = std::env::args_os().nth(1).expect("missing file argument");
+    let matches = app().get_matches();
+    let path_in = matches.value_of_os("input").unwrap();
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path)?.collect_convert_dyn::<f32>()?;
+    let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f32>()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // fft parameters
