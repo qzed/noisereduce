@@ -5,8 +5,8 @@ use sspse::vad::{self, VoiceActivityDetector, energy::EnergyThresholdVad};
 use sspse::math::{bessel, expint};
 
 use hound::{WavReader, Error};
-use num::{Complex, Float};
-use ndarray::{s, Array1, Axis, ArrayBase, Data, Ix2};
+use num::{Complex, Float, traits::FloatConst};
+use ndarray::{s, azip, Array1, Axis, ArrayBase, Data, Ix2};
 use gnuplot::{Figure, AxesCommon, AutoOption};
 
 
@@ -20,6 +20,13 @@ use gnuplot::{Figure, AxesCommon, AutoOption};
 //   - fixed: alpha
 //   - store: -
 //   - param: gain(n-1), gamma(n-1), gamma(n)
+
+// Gain computation
+// - MMSE
+//   - param: xi_k, gamma_k, Y_k
+//
+// - log-MMSE
+//   - param: xi_k, gamma_k, Y_k
 
 
 pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
@@ -101,8 +108,12 @@ fn main() -> Result<(), Error> {
             lambda_d = a * lambda_d + (1.0 - a) * yk.mapv(|v| v.norm_sqr());
         }
 
+        fn frac_sqrt_pi_2<T: Float + FloatConst>() -> T {
+            T::PI().sqrt() / T::from(2.0).unwrap()
+        }
+
         // calculate gain function
-        let g = std::f64::consts::PI.sqrt() / 2.0;
+        let g: f64 = frac_sqrt_pi_2();
 
         let nu = xi.mapv(|v| v / (1.0 + v)) * &gamma;
 
@@ -129,10 +140,7 @@ fn main() -> Result<(), Error> {
         }
 
         // apply gain
-        for (j, v) in yk.indexed_iter_mut() {
-            *v *= gain[j].min(1.0);
-            // *v *= gain[j] as f32 * 0.05;
-        }
+        azip!(mut yk, gain in { *yk *= gain.min(1.0) });
     }
 
     // perform istft
