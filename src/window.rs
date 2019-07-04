@@ -4,6 +4,7 @@ use num::{Float, traits::FloatConst};
 use ndarray::Array1;
 
 
+#[allow(clippy::len_without_is_empty)]
 pub trait WindowFunction<T> {
     fn len(&self) -> usize;
     fn coef(&self, index: usize) -> T;
@@ -86,7 +87,7 @@ where
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.start < self.end {
-            self.end = self.end - 1;
+            self.end -= 1;
             Some(self.function.coef(self.end))
         } else {
             None
@@ -549,19 +550,19 @@ pub fn blackman_alpha<T: Float>(len: usize, alpha: T) -> Blackman<T> {
 }
 
 pub fn nuttall<T: Float>(len: usize) -> Nuttall<T> {
-    let a0 = T::from(0.355768).unwrap();
-    let a1 = T::from(0.487396).unwrap();
-    let a2 = T::from(0.144232).unwrap();
-    let a3 = T::from(0.012604).unwrap();
+    let a0 = T::from(0.355_768).unwrap();
+    let a1 = T::from(0.487_396).unwrap();
+    let a2 = T::from(0.144_232).unwrap();
+    let a3 = T::from(0.012_604).unwrap();
 
     Nuttall::new(len, a0, a1, a2, a3)
 }
 
 pub fn blackman_nuttall<T: Float>(len: usize) -> Nuttall<T> {
-    let a0 = T::from(0.3635819).unwrap();
-    let a1 = T::from(0.4891775).unwrap();
-    let a2 = T::from(0.1365995).unwrap();
-    let a3 = T::from(0.0106411).unwrap();
+    let a0 = T::from(0.363_581_9).unwrap();
+    let a1 = T::from(0.489_177_5).unwrap();
+    let a2 = T::from(0.136_599_5).unwrap();
+    let a3 = T::from(0.010_641_1).unwrap();
 
     Nuttall::new(len, a0, a1, a2, a3)
 }
@@ -576,11 +577,11 @@ pub fn blackman_harris<T: Float>(len: usize) -> Nuttall<T> {
 }
 
 pub fn flat_top<T: Float>(len: usize) -> FlatTop<T> {
-    let a0 = T::from(0.21557895).unwrap();
-    let a1 = T::from(0.41663158).unwrap();
-    let a2 = T::from(0.277263158).unwrap();
-    let a3 = T::from(0.083578947).unwrap();
-    let a4 = T::from(0.006947368).unwrap();
+    let a0 = T::from(0.215_578_95).unwrap();
+    let a1 = T::from(0.416_631_58).unwrap();
+    let a2 = T::from(0.277_263_158).unwrap();
+    let a3 = T::from(0.083_578_947).unwrap();
+    let a4 = T::from(0.006_947_368).unwrap();
 
     FlatTop::new(len, a0, a1, a2, a3, a4)
 }

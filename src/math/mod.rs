@@ -21,6 +21,7 @@ pub trait NumCastUnchecked: Sized + ToPrimitiveUnchecked {
     fn from_unchecked<T: ToPrimitiveUnchecked>(n: T) -> Self;
 }
 
+#[allow(clippy::cast_lossless)]
 impl ToPrimitiveUnchecked for f32 {
     fn to_i64_unchecked(&self) -> i64 { *self as _ }
     fn to_u64_unchecked(&self) -> u64 { *self as _ }
@@ -42,6 +43,7 @@ impl NumCastUnchecked for f32 {
     }
 }
 
+#[allow(clippy::cast_lossless)]
 impl ToPrimitiveUnchecked for f64 {
     fn to_i64_unchecked(&self) -> i64 { *self as _ }
     fn to_u64_unchecked(&self) -> u64 { *self as _ }

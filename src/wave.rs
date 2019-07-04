@@ -8,11 +8,11 @@ use sample::{Sample, FromSample, I24};
 
 
 pub trait WavReaderExt<R> {
-    fn samples_convert_dyn<'r, T>(&'r mut self) -> ConvertDyn<'r, R, T>
+    fn samples_convert_dyn<T>(&mut self) -> ConvertDyn<R, T>
     where
         T: Sample + FromSignedSample + FromSample<f32>;
 
-    fn samples_convert<'r, S, T>(&'r mut self) -> Convert<'r, R, S, T>
+    fn samples_convert<S, T>(&mut self) -> Convert<R, S, T>
     where
         T: Sample + FromSample<S>,
         S: RawSample,
@@ -59,7 +59,7 @@ where
         Ok((data, spec))
     }
 
-    fn samples_convert_dyn<'r, T>(&'r mut self) -> ConvertDyn<'r, R, T>
+    fn samples_convert_dyn<T>(&mut self) -> ConvertDyn<R, T>
     where
         T: Sample + FromSignedSample + FromSample<f32>,
     {
@@ -80,7 +80,7 @@ where
         }
     }
 
-    fn samples_convert<'r, S, T>(&'r mut self) -> Convert<'r, R, S, T>
+    fn samples_convert<S, T>(&mut self) -> Convert<R, S, T>
     where
         T: Sample + FromSample<S>,
         S: RawSample,

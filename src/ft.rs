@@ -1,3 +1,5 @@
+#![allow(clippy::deref_addrof)]
+
 // see https://ccrma.stanford.edu/~jos/sasp/Summary_STFT_Computation_Using.html
 
 use crate::window::WindowFunction;
@@ -203,7 +205,7 @@ where
     M: DataMut<Elem = F>,
     F: Clone,
 {
-    output.slice_mut(s![0..n]).assign(&input.slice(s![1..n+1; -1]));
+    output.slice_mut(s![0..n]).assign(&input.slice(s![1..=n; -1]));
     output.slice_mut(s![n..n+input.len()]).assign(&input);
     output.slice_mut(s![n+input.len()..]).assign(&input.slice(s![input.len()-n-1..input.len()-1; -1]));
 }
@@ -229,7 +231,7 @@ where
 
     let mut ext_a = output.slice_mut(s![0..n]);
     ext_a.fill(a);
-    ext_a -= &input.slice(s![1..n+1; -1]);
+    ext_a -= &input.slice(s![1..=n; -1]);
 
     output.slice_mut(s![n..n+input.len()]).assign(&input);
 
@@ -630,7 +632,7 @@ where
         sample_times(self.len_output(len_spectrum), sample_rate)
     }
 
-    pub fn process<'a, 'b, D>(&mut self, input: &ArrayBase<D, Ix2>) -> Array1<Complex<T>>
+    pub fn process<D>(&mut self, input: &ArrayBase<D, Ix2>) -> Array1<Complex<T>>
     where
         D: Data<Elem = Complex<T>>,
     {
