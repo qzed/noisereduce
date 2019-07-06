@@ -38,6 +38,18 @@ where
     }
 }
 
+impl<T> Gain<T> for Box<dyn Gain<T>> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        self.as_mut().update(spectrum, snr_pre, snr_post, gain)
+    }
+}
+
 
 pub struct Mmse<T> {
     nu_min: T,
@@ -131,6 +143,12 @@ where
     }
 }
 
+impl<T> NoiseTracker<T> for Box<dyn NoiseTracker<T>> {
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
+        self.as_mut().update(spectrum, noise_est)
+    }
+}
+
 
 pub struct ExpTimeAvgNoise<T, V> {
     voiced: Array1<bool>,
@@ -178,6 +196,36 @@ pub trait SnrEstimator<T> {
     );
 }
 
+impl<T, S> SnrEstimator<T> for Box<S>
+where
+    S: SnrEstimator<T>,
+{
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    ) {
+        self.as_mut().update(spectrum, noise_power, gain, snr_pre, snr_post)
+    }
+}
+
+impl<T> SnrEstimator<T> for Box<dyn SnrEstimator<T>> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    ) {
+        self.as_mut().update(spectrum, noise_power, gain, snr_pre, snr_post)
+    }
+}
+
+
 pub struct DecisionDirected<T> {
     alpha: T,
     snr_pre_max: T,
@@ -219,6 +267,78 @@ where
 
             *snr_pre = snr_pre_.min(self.snr_pre_max);
             *snr_post = snr_post_.min(self.snr_post_max);
+        });
+    }
+}
+
+
+pub trait Processor<T> {
+    fn block_size(&self) -> usize;
+    fn process(&mut self, spectrum_in: ArrayView1<Complex<T>>, spectrum_out: ArrayViewMut1<Complex<T>>);
+}
+
+pub struct Stsa<T, G, S, N> {
+    block_size: usize,
+
+    gain_fn: G,
+    snr_est: S,
+    noise_est: N,
+
+    noise_pwr: Array1<T>,
+    snr_pre: Array1<T>,
+    snr_post: Array1<T>,
+    gain: Array1<T>,
+}
+
+impl<T, G, S, N> Stsa<T, G, S, N>
+where
+    T: Float,
+    G: Gain<T>,
+    N: NoiseTracker<T>,
+    S: SnrEstimator<T>,
+{
+    pub fn new(block_size: usize, gain: G, snr_est: S, noise_est: N) -> Self {
+        Stsa {
+            block_size,
+
+            gain_fn: gain,
+            snr_est,
+            noise_est,
+
+            noise_pwr: Array1::zeros(block_size),
+            snr_pre: Array1::from_elem(block_size, T::one()),
+            snr_post: Array1::from_elem(block_size, T::one()),
+            gain: Array1::from_elem(block_size, T::one()),
+        }
+    }
+}
+
+impl<T, G, S, N> Processor<T> for Stsa<T, G, S, N>
+where
+    T: Float,
+    G: Gain<T>,
+    N: NoiseTracker<T>,
+    S: SnrEstimator<T>,
+{
+    fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    fn process(&mut self, spectrum_in: ArrayView1<Complex<T>>, mut spectrum_out: ArrayViewMut1<Complex<T>>) {
+        // update noise estimate
+        self.noise_est.update(spectrum_in.view(), self.noise_pwr.view_mut());
+
+        // update a priori and a posteriori snr
+        self.snr_est.update(spectrum_in.view(), self.noise_pwr.view(), self.gain.view(),
+                            self.snr_pre.view_mut(), self.snr_post.view_mut());
+
+        // calculate gain function
+        self.gain_fn.update(spectrum_in.view(), self.snr_pre.view(), self.snr_post.view(),
+                            self.gain.view_mut());
+
+        // apply gain
+        azip!(mut spectrum_out, spectrum_in, gain (&self.gain) in {
+            *spectrum_out = spectrum_in * gain.min(T::one())
         });
     }
 }
@@ -306,57 +426,40 @@ fn main() -> Result<(), Error> {
         .build();
 
     // perform stft
-    let mut spectrum = stft.process(&samples_c);
-    let spectrum_orig = spectrum.clone();
+    let spectrum = stft.process(&samples_c);
+    let mut spectrum_out = spectrum.clone();
 
-    // initial noise estimate
-    let mut lambda_d = noise_power_est(&spectrum.slice(s![..3, ..]));
-
+    // set-up voice-activity detector
     let noise_floor = power::noise_floor_est(&spectrum.slice(s![..3, ..]));
     let vad = PowerThresholdVad::new(noise_floor, 1.3);
 
     // let noise_floor = energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
     // let vad = EnergyThresholdVad::new(noise_floor, 1.3).per_band();
 
-    // set parameters
-    let alpha = 0.98;
+    // set-up algorithm parts
+    let noise_tracker = ExpTimeAvgNoise::new(segment_len, 0.8, vad);
+    let snr_est = DecisionDirected::new(0.98);
 
-    // initial a priori and a posteriori snr
-    let mut gain = Array1::from_elem(segment_len, 1.0);
-    let mut gamma = &spectrum.index_axis(Axis(0), 0).mapv(|v| v.norm_sqr()) / &lambda_d;
-    let mut xi = alpha + (1.0 - alpha) * gamma.mapv(|v| (v - 1.0).max(0.0));
-
-    let mut noise_tracker = ExpTimeAvgNoise::new(segment_len, 0.5, vad);
-    let mut snr_est = DecisionDirected::new(alpha);
-
-    let mut gain_fn: Box<dyn Gain<_>> = if logmmse {
+    let gain_fn: Box<dyn Gain<_>> = if logmmse {
         Box::new(LogMmse::new())
     } else {
         Box::new(Mmse::new())
     };
 
+    let mut stsa = Stsa::new(segment_len, gain_fn, snr_est, noise_tracker);
+    stsa.noise_pwr = noise_power_est(&spectrum.slice(s![..3, ..]));
+
     // main algorithm loop over spectrum frames
     let num_frames = spectrum.shape()[0];
     for i in 0..num_frames {
-        let mut yk = spectrum.index_axis_mut(Axis(0), i);
+        let y_in = spectrum.index_axis(Axis(0), i);
+        let y_out = spectrum_out.index_axis_mut(Axis(0), i);
 
-        // update noise estimate
-        noise_tracker.update(yk.view(), lambda_d.view_mut());
-
-        // calculate gain function
-        gain_fn.update(yk.view(), xi.view(), gamma.view(), gain.view_mut());
-
-        // update a priori and a posteriori snr (decision directed)
-        if i < num_frames - 1 {
-            snr_est.update(yk.view(), lambda_d.view(), gain.view(), xi.view_mut(), gamma.view_mut());
-        }
-
-        // apply gain
-        azip!(mut yk, gain in { *yk *= gain.min(1.0) });
+        stsa.process(y_in, y_out);
     }
 
     // perform istft
-    let out = istft.process(&spectrum);
+    let out = istft.process(&spectrum_out);
     let out = out.mapv(|v| v.re as f32);
 
     // write
@@ -386,7 +489,7 @@ fn main() -> Result<(), Error> {
         let t1 = times[times.len() - 1];
 
         // plot original spectrum
-        let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
+        let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
 
         let mut fig = Figure::new();
         let ax = fig.axes2d();
@@ -397,7 +500,7 @@ fn main() -> Result<(), Error> {
         fig.show();
 
         // plot modified spectrum
-        let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
+        let visual = ft::spectrum_to_visual(&spectrum_out, -1e2, 1e2);
 
         let mut fig = Figure::new();
         let ax = fig.axes2d();
