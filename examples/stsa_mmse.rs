@@ -1,87 +1,228 @@
 use sspse::ft;
 use sspse::vad::b::{power, power::PowerThresholdVad, VoiceActivityDetector};
 // use sspse::vad::f::{energy, VoiceActivityDetector, energy::EnergyThresholdVad};
+use sspse::math::{bessel, expint, NumCastUnchecked};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
-use sspse::math::{bessel, expint, NumCastUnchecked};
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
-use ndarray::{azip, s, Array1, ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
+use ndarray::{azip, s, Array1, ArrayView1, ArrayViewMut1, ArrayBase, Axis, Data, Ix2};
 use num::{traits::FloatConst, Complex, Float};
 
 
-// SNR estimation:
-// - ml:
-//   - fixed: alpha, beta
-//   - store: gamma-avg
-//   - param: gamma(n)
-//
-// - dd
-//   - fixed: alpha
-//   - store: -
-//   - param: gain(n-1), gamma(n-1), gamma(n)
-
-// Gain computation
-// - MMSE
-//   - param: xi_k, gamma_k, Y_k
-//
-// - log-MMSE
-//   - param: xi_k, gamma_k
-
-
-fn gain_mmse<T, D1, D2, D3, Do>(
-    y_spec: &ArrayBase<D1, Ix1>,
-    xi: &ArrayBase<D2, Ix1>,
-    gamma: &ArrayBase<D3, Ix1>,
-    gain: &mut ArrayBase<Do, Ix1>,
-) where
-    T: Float + FloatConst + NumCastUnchecked,
-    D1: Data<Elem = Complex<T>>,
-    D2: Data<Elem = T>,
-    D3: Data<Elem = T>,
-    Do: DataMut<Elem = T>,
-{
-    let nu_min = T::from(1e-50).unwrap();
-    let nu_max = T::from(500.0).unwrap();
-
-    let half = T::from(0.5).unwrap();
-    let fspi2 = T::PI().sqrt() * half;
-
-    azip!(mut gain (gain), yk (y_spec), xi (xi), gamma (gamma) in {
-        let nu = xi / (T::one() + xi) * gamma;
-        let nu = nu.max(nu_min).min(nu_max);        // prevent over/underflows
-
-        *gain = fspi2
-            * (T::sqrt(nu) * T::exp(-nu * half) / gamma)
-            * ((T::one() + nu) * bessel::I0(nu * half) + nu * bessel::I1(nu * half))
-            * yk.norm();
-    });
+pub trait Gain<T> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    );
 }
 
-fn gain_logmmse<T, D1, D2, Do>(
-    xi: &ArrayBase<D1, Ix1>,
-    gamma: &ArrayBase<D2, Ix1>,
-    gain: &mut ArrayBase<Do, Ix1>,
-) where
-    T: Float + FloatConst + NumCastUnchecked,
-    D1: Data<Elem = T>,
-    D2: Data<Elem = T>,
-    Do: DataMut<Elem = T>,
+
+impl<T, G> Gain<T> for Box<G>
+where
+    G: Gain<T>,
 {
-    let nu_min = T::from(1e-50).unwrap();
-    let nu_max = T::from(500.0).unwrap();
-
-    let half = T::from(0.5).unwrap();
-
-    azip!(mut gain (gain), xi (xi), gamma (gamma) in {
-        let nu = xi / (T::one() + xi) * gamma;
-        let nu = nu.max(nu_min).min(nu_max);        // prevent over/underflows
-
-        *gain = (xi / (T::one() + xi)) * T::exp(-half * expint::Ei(-nu));
-    });
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        self.as_mut().update(spectrum, snr_pre, snr_post, gain)
+    }
 }
+
+
+pub struct Mmse<T> {
+    nu_min: T,
+    nu_max: T,
+}
+
+impl<T: Float> Mmse<T> {
+    pub fn new() -> Self {
+        Mmse {
+            nu_min: T::from(1e-50).unwrap(),
+            nu_max: T::from(500.0).unwrap(),
+        }
+    }
+}
+
+impl<T> Gain<T> for Mmse<T>
+where
+    T: Float + FloatConst + NumCastUnchecked,
+{
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        let half = T::from(0.5).unwrap();
+        let fspi2 = T::PI().sqrt() * half;
+
+        azip!(mut gain (gain), spectrum (spectrum), snr_pre (snr_pre), snr_post (snr_post) in {
+            let nu = snr_pre / (T::one() + snr_pre) * snr_post;
+            let nu = nu.max(self.nu_min).min(self.nu_max);          // prevent over/underflows
+
+            *gain = fspi2
+                * (T::sqrt(nu) * T::exp(-nu * half) / snr_post)
+                * ((T::one() + nu) * bessel::I0(nu * half) + nu * bessel::I1(nu * half))
+                * spectrum.norm();
+        });
+    }
+}
+
+
+pub struct LogMmse<T> {
+    nu_min: T,
+    nu_max: T,
+}
+
+impl<T: Float> LogMmse<T> {
+    pub fn new() -> Self {
+        LogMmse {
+            nu_min: T::from(1e-50).unwrap(),
+            nu_max: T::from(500.0).unwrap(),
+        }
+    }
+}
+
+impl<T> Gain<T> for LogMmse<T>
+where
+    T: Float + FloatConst + NumCastUnchecked,
+{
+    fn update(
+        &mut self,
+        _spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        let half = T::from(0.5).unwrap();
+
+        azip!(mut gain (gain), snr_pre (snr_pre), snr_post (snr_post) in {
+            let nu = snr_pre / (T::one() + snr_pre) * snr_post;
+            let nu = nu.max(self.nu_min).min(self.nu_max);          // prevent over/underflows
+
+            *gain = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
+        });
+    }
+}
+
+
+pub trait NoiseTracker<T> {
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>);
+}
+
+
+impl<T, N> NoiseTracker<T> for Box<N>
+where
+    N: NoiseTracker<T>,
+{
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
+        self.as_mut().update(spectrum, noise_est)
+    }
+}
+
+
+pub struct ExpTimeAvgNoise<T, V> {
+    voiced: Array1<bool>,
+    alpha: T,
+    vad: V,
+}
+
+impl<T, V> ExpTimeAvgNoise<T, V>
+where
+    T: Float,
+{
+    pub fn new(block_size: usize, alpha: T, vad: V) -> Self {
+        ExpTimeAvgNoise {
+            voiced: Array1::from_elem(block_size, false),
+            alpha,
+            vad,
+        }
+    }
+}
+
+impl<T, V> NoiseTracker<T> for ExpTimeAvgNoise<T, V>
+where
+    T: Float,
+    V: VoiceActivityDetector<T>,
+{
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
+        self.vad.detect_into(&spectrum, &mut self.voiced);
+        azip!(mut noise (noise_est), voiced (&self.voiced), spectrum (spectrum) in {
+            if !voiced {
+                *noise = self.alpha * *noise + (T::one() - self.alpha) * spectrum.norm_sqr();
+            }
+        });
+    }
+}
+
+
+pub trait SnrEstimator<T> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    );
+}
+
+pub struct DecisionDirected<T> {
+    alpha: T,
+    snr_pre_max: T,
+    snr_post_max: T,
+}
+
+impl<T: Float> DecisionDirected<T> {
+    pub fn new(alpha: T) -> Self {
+        DecisionDirected {
+            alpha,
+            snr_pre_max: T::from(1e3).unwrap(),
+            snr_post_max: T::from(1e3).unwrap(),
+        }
+    }
+}
+
+impl<T> SnrEstimator<T>  for DecisionDirected<T>
+where
+    T: Float,
+{
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    ) {
+        azip!(
+            mut snr_pre (snr_pre),
+            mut snr_post (snr_post),
+            spectrum (spectrum),
+            noise_power (noise_power),
+            gain (gain)
+        in {
+            let snr_post_ = spectrum.norm_sqr() / noise_power;
+            let snr_pre_ = self.alpha * gain.powi(2) * *snr_post
+                + (T::one() - self.alpha) * (snr_post_ - T::one()).max(T::zero());
+
+            *snr_pre = snr_pre_.min(self.snr_pre_max);
+            *snr_post = snr_post_.min(self.snr_post_max);
+        });
+    }
+}
+
 
 pub fn noise_power_est<T, D>(spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
 where
@@ -101,22 +242,30 @@ where
 fn app() -> App<'static, 'static> {
     App::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
         .author(clap::crate_authors!())
-        .arg(Arg::with_name("input")
+        .arg(
+            Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
-        .arg(Arg::with_name("output")
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(false))
-        .arg(Arg::with_name("plot")
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("plot")
                 .help("Wheter to plot the results or not")
                 .short("p")
-                .long("plot"))
-        .arg(Arg::with_name("log_mmse")
+                .long("plot"),
+        )
+        .arg(
+            Arg::with_name("log_mmse")
                 .help("Use log-MMSE instead of plain MMSE")
                 .short("l")
-                .long("log-mmse"))
+                .long("log-mmse"),
+        )
 }
 
 fn main() -> Result<(), Error> {
@@ -176,7 +325,15 @@ fn main() -> Result<(), Error> {
     let mut gain = Array1::from_elem(segment_len, 1.0);
     let mut gamma = &spectrum.index_axis(Axis(0), 0).mapv(|v| v.norm_sqr()) / &lambda_d;
     let mut xi = alpha + (1.0 - alpha) * gamma.mapv(|v| (v - 1.0).max(0.0));
-    let mut voice_activity = Array1::from_elem(segment_len, false);
+
+    let mut noise_tracker = ExpTimeAvgNoise::new(segment_len, 0.5, vad);
+    let mut snr_est = DecisionDirected::new(alpha);
+
+    let mut gain_fn: Box<dyn Gain<_>> = if logmmse {
+        Box::new(LogMmse::new())
+    } else {
+        Box::new(Mmse::new())
+    };
 
     // main algorithm loop over spectrum frames
     let num_frames = spectrum.shape()[0];
@@ -184,30 +341,14 @@ fn main() -> Result<(), Error> {
         let mut yk = spectrum.index_axis_mut(Axis(0), i);
 
         // update noise estimate
-        vad.detect_into(&yk, &mut voice_activity);
-        azip!(mut lambda_d, voice_activity, yk in {
-            if !voice_activity {
-                let a = 0.5;
-                *lambda_d = a * *lambda_d + (1.0 - a) * yk.norm_sqr();
-            }
-        });
+        noise_tracker.update(yk.view(), lambda_d.view_mut());
 
         // calculate gain function
-        if logmmse {
-            gain_logmmse(&xi, &gamma, &mut gain);
-        } else {
-            gain_mmse(&yk, &xi, &gamma, &mut gain);
-        }
+        gain_fn.update(yk.view(), xi.view(), gamma.view(), gain.view_mut());
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
-            azip!(mut xi, mut gamma, yk, lambda_d, gain in {
-                let gamma_ = yk.norm_sqr() / lambda_d;
-                let xi_ = alpha * gain.powi(2) * *gamma + (1.0 - alpha) * (gamma_ - 1.0).max(0.0);
-
-                *xi = xi_.min(1e3);
-                *gamma = gamma_.min(1e3);
-            });
+            snr_est.update(yk.view(), lambda_d.view(), gain.view(), xi.view_mut(), gamma.view_mut());
         }
 
         // apply gain
