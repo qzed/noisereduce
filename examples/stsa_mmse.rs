@@ -8,7 +8,7 @@ use sspse::vad::b::power::{self, PowerThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
-use clap::{App, Arg};
+use clap::{value_t_or_exit, App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
 use ndarray::{s, Axis};
@@ -34,15 +34,34 @@ fn app() -> App<'static, 'static> {
                 .help("Use log-MMSE instead of plain MMSE")
                 .short("l")
                 .long("log-mmse"))
+        .arg(Arg::with_name("snr_alpha")
+                .help("Alpha value for SNR estimator (exp. avg.)")
+                .long("snr-alpha")
+                .takes_value(true)
+                .default_value("0.98"))
+        .arg(Arg::with_name("noise_alpha")
+                .help("Alpha value for noise tracker (exp. avg.)")
+                .long("noise-alpha")
+                .takes_value(true)
+                .default_value("0.8"))
+        .arg(Arg::with_name("vad_ratio")
+                .help("Ratio for VAD voice classification")
+                .long("vad-ratio")
+                .takes_value(true)
+                .default_value("1.3"))
 }
 
 fn main() -> Result<(), Error> {
     let matches = app().get_matches();
 
-    let path_in = matches.value_of_os("input").unwrap();
+    let path_in  = matches.value_of_os("input").unwrap();
     let path_out = matches.value_of_os("output");
-    let plot = matches.is_present("plot");
-    let logmmse = matches.is_present("log_mmse");
+    let plot     = matches.is_present("plot");
+    let logmmse  = matches.is_present("log_mmse");
+
+    let snr_alpha   = value_t_or_exit!(matches, "snr_alpha",   f64);
+    let noise_alpha = value_t_or_exit!(matches, "noise_alpha", f64);
+    let vad_ratio   = value_t_or_exit!(matches, "vad_ratio",   f64);
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
@@ -79,14 +98,14 @@ fn main() -> Result<(), Error> {
 
     // set-up voice-activity detector
     let noise_floor = power::noise_floor_est(&spectrum.slice(s![..3, ..]));
-    let vad = PowerThresholdVad::new(noise_floor, 1.3);
+    let vad = PowerThresholdVad::new(noise_floor, vad_ratio);
 
     // let noise_floor = energy::noise_floor_est(&spectrum.slice(s![..3, ..]));
-    // let vad = EnergyThresholdVad::new(noise_floor, 1.3).per_band();
+    // let vad = EnergyThresholdVad::new(noise_floor, vad_ratio).per_band();
 
     // set-up algorithm parts
-    let noise_tracker = ExpTimeAvgNoise::new(segment_len, 0.8, vad);
-    let snr_est = DecisionDirected::new(0.98);
+    let noise_tracker = ExpTimeAvgNoise::new(segment_len, noise_alpha, vad);
+    let snr_est = DecisionDirected::new(snr_alpha);
 
     let gain_fn: Box<dyn Gain<_>> = if logmmse {
         Box::new(LogMmse::new())
