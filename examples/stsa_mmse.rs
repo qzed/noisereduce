@@ -1,6 +1,6 @@
 use sspse::ft;
-use sspse::vad::b::{power, power::PowerThresholdVad, VoiceActivityDetector as _};
-// use sspse::vad::f::{energy, VoiceActivityDetector as _, energy::EnergyThresholdVad};
+use sspse::vad::b::{power, power::PowerThresholdVad, VoiceActivityDetector};
+// use sspse::vad::f::{energy, VoiceActivityDetector, energy::EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 use sspse::math::{bessel, expint, NumCastUnchecked};
@@ -60,16 +60,14 @@ fn gain_mmse<T, D1, D2, D3, Do>(
     });
 }
 
-fn gain_logmmse<T, D1, D2, D3, Do>(
-    _y_spec: &ArrayBase<D1, Ix1>,
-    xi: &ArrayBase<D2, Ix1>,
-    gamma: &ArrayBase<D3, Ix1>,
+fn gain_logmmse<T, D1, D2, Do>(
+    xi: &ArrayBase<D1, Ix1>,
+    gamma: &ArrayBase<D2, Ix1>,
     gain: &mut ArrayBase<Do, Ix1>,
 ) where
     T: Float + FloatConst + NumCastUnchecked,
-    D1: Data<Elem = Complex<T>>,
+    D1: Data<Elem = T>,
     D2: Data<Elem = T>,
-    D3: Data<Elem = T>,
     Do: DataMut<Elem = T>,
 {
     let nu_min = T::from(1e-50).unwrap();
@@ -175,10 +173,10 @@ fn main() -> Result<(), Error> {
     let alpha = 0.98;
 
     // initial a priori and a posteriori snr
-    let mut gain = Array1::zeros(segment_len);
+    let mut gain = Array1::from_elem(segment_len, 1.0);
     let mut gamma = &spectrum.index_axis(Axis(0), 0).mapv(|v| v.norm_sqr()) / &lambda_d;
-    let mut gamma_new = Array1::zeros(segment_len);
     let mut xi = alpha + (1.0 - alpha) * gamma.mapv(|v| (v - 1.0).max(0.0));
+    let mut voice_activity = Array1::from_elem(segment_len, false);
 
     // main algorithm loop over spectrum frames
     let num_frames = spectrum.shape()[0];
@@ -186,9 +184,9 @@ fn main() -> Result<(), Error> {
         let mut yk = spectrum.index_axis_mut(Axis(0), i);
 
         // update noise estimate
-        let vad = vad.detect(&yk);
-        azip!(mut lambda_d, vad, yk in {
-            if !vad {
+        vad.detect_into(&yk, &mut voice_activity);
+        azip!(mut lambda_d, voice_activity, yk in {
+            if !voice_activity {
                 let a = 0.5;
                 *lambda_d = a * *lambda_d + (1.0 - a) * yk.norm_sqr();
             }
@@ -196,22 +194,20 @@ fn main() -> Result<(), Error> {
 
         // calculate gain function
         if logmmse {
-            gain_logmmse(&yk, &xi, &gamma, &mut gain);
+            gain_logmmse(&xi, &gamma, &mut gain);
         } else {
             gain_mmse(&yk, &xi, &gamma, &mut gain);
         }
 
         // update a priori and a posteriori snr (decision directed)
         if i < num_frames - 1 {
-            gamma_new.assign(&(yk.mapv(|v| v.norm_sqr()) / &lambda_d));
+            azip!(mut xi, mut gamma, yk, lambda_d, gain in {
+                let gamma_ = yk.norm_sqr() / lambda_d;
+                let xi_ = alpha * gain.powi(2) * *gamma + (1.0 - alpha) * (gamma_ - 1.0).max(0.0);
 
-            let g2 = gain.mapv(|v| v.powi(2));
-            xi = alpha * &g2 * &gamma + (1.0 - alpha) * gamma_new.mapv(|v| (v - 1.0).max(0.0));
-
-            gamma.assign(&gamma_new);
-
-            xi.mapv_inplace(|v| v.min(1e3));
-            gamma.mapv_inplace(|v| v.min(1e3));
+                *xi = xi_.min(1e3);
+                *gamma = gamma_.min(1e3);
+            });
         }
 
         // apply gain
