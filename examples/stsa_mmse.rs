@@ -106,6 +106,7 @@ fn main() -> Result<(), Error> {
     // set-up algorithm parts
     let noise_tracker = ExpTimeAvgNoise::new(segment_len, noise_alpha, vad);
     let snr_est = DecisionDirected::new(snr_alpha);
+    // let snr_est = MaximumLikelihood::new(segment_len, 0.725, 2.0);
 
     let gain_fn: Box<dyn Gain<_>> = if logmmse {
         Box::new(LogMmse::new())
