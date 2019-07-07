@@ -47,6 +47,33 @@ impl<T> Gain<T> for Box<dyn Gain<T>> {
     }
 }
 
+impl<T, G> Gain<T> for &mut G
+where
+    G: Gain<T>,
+{
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        (**self).update(spectrum, snr_pre, snr_post, gain)
+    }
+}
+
+impl<T> Gain<T> for &mut dyn Gain<T> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        gain: ArrayViewMut1<T>,
+    ) {
+        (**self).update(spectrum, snr_pre, snr_post, gain)
+    }
+}
+
 
 pub trait NoiseTracker<T> {
     fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>);
@@ -64,6 +91,21 @@ where
 impl<T> NoiseTracker<T> for Box<dyn NoiseTracker<T>> {
     fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
         self.as_mut().update(spectrum, noise_est)
+    }
+}
+
+impl<T, N> NoiseTracker<T> for &mut N
+where
+    N: NoiseTracker<T>,
+{
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
+        (**self).update(spectrum, noise_est)
+    }
+}
+
+impl<T> NoiseTracker<T> for &mut dyn NoiseTracker<T> {
+    fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
+        (**self).update(spectrum, noise_est)
     }
 }
 
@@ -105,6 +147,35 @@ impl<T> SnrEstimator<T> for Box<dyn SnrEstimator<T>> {
         snr_post: ArrayViewMut1<T>,
     ) {
         self.as_mut().update(spectrum, noise_power, gain, snr_pre, snr_post)
+    }
+}
+
+impl<T, S> SnrEstimator<T> for &mut S
+where
+    S: SnrEstimator<T>,
+{
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    ) {
+        (**self).update(spectrum, noise_power, gain, snr_pre, snr_post)
+    }
+}
+
+impl<T> SnrEstimator<T> for &mut dyn SnrEstimator<T> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        noise_power: ArrayView1<T>,
+        gain: ArrayView1<T>,
+        snr_pre: ArrayViewMut1<T>,
+        snr_post: ArrayViewMut1<T>,
+    ) {
+        (**self).update(spectrum, noise_power, gain, snr_pre, snr_post)
     }
 }
 
