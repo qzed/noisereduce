@@ -1,8 +1,9 @@
 use sspse::ft;
+use sspse::proc;
 use sspse::stsa::gain::{LogMmse, Mmse};
 use sspse::stsa::noise::ExpTimeAvgNoise;
 use sspse::stsa::snr::DecisionDirected;
-use sspse::stsa::{self, Gain, Processor, Stsa};
+use sspse::stsa::{self, Gain, Stsa};
 use sspse::vad::b::power::{self, PowerThresholdVad};
 // use sspse::vad::f::energy::{self, EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
@@ -118,13 +119,7 @@ fn main() -> Result<(), Error> {
     stsa.set_noise_power_estimate(&stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])));
 
     // main algorithm loop over spectrum frames
-    let num_frames = spectrum.shape()[0];
-    for i in 0..num_frames {
-        let y_in = spectrum.index_axis(Axis(0), i);
-        let y_out = spectrum_out.index_axis_mut(Axis(0), i);
-
-        stsa.process(y_in, y_out);
-    }
+    proc::utils::process(&mut stsa, &spectrum, &mut spectrum_out);
 
     // perform istft
     let out = istft.process(&spectrum_out);

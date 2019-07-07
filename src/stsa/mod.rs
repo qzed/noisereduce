@@ -4,14 +4,10 @@ pub mod snr;
 pub mod utils;
 
 
+use crate::proc::Processor;
+
 use ndarray::{azip, Array1, ArrayBase, ArrayView1, ArrayViewMut1, Data, Ix1};
 use num::{Complex, Float};
-
-
-pub trait Processor<T> {
-    fn block_size(&self) -> usize;
-    fn process(&mut self, spectrum_in: ArrayView1<Complex<T>>, spectrum_out: ArrayViewMut1<Complex<T>>);
-}
 
 
 pub trait Gain<T> {
