@@ -711,7 +711,6 @@ where
         for i in 0..len_spectrum {
             self.buf_in.assign(&input.index_axis(Axis(0), i));
 
-            // TODO: this needs to be inverse -> split into two structs
             self.ifft.process(
                 self.buf_in.as_slice_mut().unwrap(),
                 self.buf_out.as_slice_mut().unwrap(),
