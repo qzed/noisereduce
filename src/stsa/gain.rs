@@ -18,6 +18,10 @@ impl<T: Float> Mmse<T> {
             nu_max: T::from(500.0).unwrap(),
         }
     }
+
+    pub fn with_parameters(nu_min: T, nu_max: T) -> Self {
+        Mmse { nu_min, nu_max }
+    }
 }
 
 impl<T> Gain<T> for Mmse<T>
@@ -58,6 +62,10 @@ impl<T: Float> LogMmse<T> {
             nu_min: T::from(1e-50).unwrap(),
             nu_max: T::from(500.0).unwrap(),
         }
+    }
+
+    pub fn with_parameters(nu_min: T, nu_max: T) -> Self {
+        LogMmse { nu_min, nu_max }
     }
 }
 

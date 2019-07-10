@@ -14,9 +14,13 @@ impl<T: Float> DecisionDirected<T> {
     pub fn new(alpha: T) -> Self {
         DecisionDirected {
             alpha,
-            snr_pre_max: T::from(1e10).unwrap(),
-            snr_post_max: T::from(1e10).unwrap(),
+            snr_pre_max: T::from(1e30).unwrap(),
+            snr_post_max: T::from(1e30).unwrap(),
         }
+    }
+
+    pub fn with_parameters(alpha: T, snr_pre_max: T, snr_post_max: T) -> Self {
+        DecisionDirected { alpha, snr_pre_max, snr_post_max }
     }
 }
 
