@@ -170,10 +170,10 @@ where
             frame: 0,
             snr_pre: Array1::from_elem(block_size, T::one()),
             snr_pre_avg: Array1::from_elem(block_size, T::zero()),
-            snr_pre_avg_beta: T::from(0.5).unwrap(),
+            snr_pre_avg_beta: T::from(0.7).unwrap(),
             snr_post: Array1::from_elem(block_size, T::one()),
             noise_power: Array1::from_elem(block_size, T::zero()),
-            noise_power_alpha: T::from(0.8).unwrap(),
+            noise_power_alpha: T::from(0.95).unwrap(),
             spectrum_power_avg: Array1::from_elem(block_size, T::zero()),
             spectrum_power_alpha: T::from(0.8).unwrap(),
             spectrum_power_min: Array1::from_elem(block_size, T::zero()),
@@ -182,8 +182,8 @@ where
             gain: Array1::from_elem(block_size, T::one()),
             p_gain: Array1::from_elem(block_size, T::one()),
             p_noise: Array1::from_elem(block_size, T::one()),
-            p_noise_alpha: T::from(0.1).unwrap(),
-            p_noise_threshold: T::from(1.1).unwrap(),
+            p_noise_alpha: T::from(0.2).unwrap(),
+            p_noise_threshold: T::from(5).unwrap(),
             gain_min: T::from(0.001).unwrap(),
             snr_alpha: T::from(0.98).unwrap(),
             snr_pre_max: T::from(1e3).unwrap(),
@@ -335,7 +335,7 @@ where
 
                 // compute conditional speech presence probability
                 let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows
+                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows      // TODO: neccessary here?
 
                 let p_ = T::one() + (q / (T::one() - q)) * (T::one() + snr_pre) * T::exp(-nu);
                 let p_ = T::one() / p_;
@@ -357,7 +357,7 @@ where
 
             azip!(mut gain (gain), mut gain_h (gain_h), snr_pre (snr_pre), snr_post (snr_post) p (p) in {
                 let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows
+                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows      // TODO: neccessary here?
 
                 let gh = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
                 let g = gh.powf(p) * gain_min.powf(T::one() - p);
@@ -369,16 +369,19 @@ where
 
         {   // noise spectrum estimation
             // average spectrum in frequency (S_f)
-            let w = 25;
-            let b = sspse::window::hamming::<T>(w * 2 + 1).to_array();
+            let w = 2;
+            let b = sspse::window::hann::<T>(w * 2 + 1).to_array();
 
             let y_pwr = spec_in.mapv(|v| v.norm_sqr());
-            let y_padded = sspse::ft::extend_zero(&y_pwr, w);
+            let y_padded = sspse::ft::extend_even(&y_pwr, w);
 
             let mut sf = Array1::zeros(self.block_size);
             for k in 0..self.block_size {
                 for i in -(w as isize)..=(w as isize) {
-                    sf[k] = y_padded[k + w] * b[(i + w as isize) as usize];
+                    let idx_window = (i + w as isize) as usize;
+                    let idx_spectr = (i + k as isize + w as isize) as usize;
+
+                    sf[k] += y_padded[idx_spectr] * b[idx_window];
                 }
             }
             let sf = sf;
@@ -401,16 +404,9 @@ where
                 *s_tmp = s_tmp.min(s);
             });
 
-            let l = 10;
+            let l = 125;
             if self.frame % l == 0 {
-                let s_min = &mut self.spectrum_power_min;
-                let s_tmp = &self.spectrum_power_tmp;
-                let s = &self.spectrum_power_avg;
-
-                azip!(mut s_min (s_min), s_tmp (s_tmp), s (s) in {
-                    *s_min = s_tmp.min(s)
-                });
-
+                self.spectrum_power_min.assign(&self.spectrum_power_tmp);
                 self.spectrum_power_tmp.assign(&self.spectrum_power_avg);
             }
 
