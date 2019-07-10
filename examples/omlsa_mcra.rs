@@ -185,11 +185,11 @@ where
             p_noise_alpha: T::from(0.2).unwrap(),
             p_noise_threshold: T::from(5).unwrap(),
             gain_min: T::from(0.001).unwrap(),
-            snr_alpha: T::from(0.98).unwrap(),
-            snr_pre_max: T::from(1e3).unwrap(),
-            snr_post_max: T::from(1e3).unwrap(),
+            snr_alpha: T::from(0.92).unwrap(),
+            snr_pre_max: T::from(1e30).unwrap(),
+            snr_post_max: T::from(1e30).unwrap(),
             nu_min: T::from(1e-50).unwrap(),
-            nu_max: T::from(500.0).unwrap(),
+            nu_max: T::from(5e2).unwrap(),
             snr_pre_avg_frame: T::from(1.0).unwrap(),
             snr_pre_avg_peak: T::from(1.0).unwrap(),
         }
@@ -277,8 +277,8 @@ where
             // compute probabilities
             let snr_pre_avg_min = T::from(1e-3).unwrap();
             let snr_pre_avg_max = T::from(1e3).unwrap();
-            let snr_pre_avg_peak_min = T::from(1e-3).unwrap();
-            let snr_pre_avg_peak_max = T::from(1e3).unwrap();
+            let snr_pre_avg_peak_min = T::from(1.0).unwrap();
+            let snr_pre_avg_peak_max = T::from(1e5).unwrap();
 
             let p_local = snr_pre_avg_local.mapv_into(|v| {
                 if v <= snr_pre_avg_min {
@@ -326,16 +326,13 @@ where
             let snr_pre = &self.snr_pre;
             let snr_post = &self.snr_post;
 
-            let nu_max = self.nu_max;
-            let nu_min = self.nu_min;
-
             azip!(mut p (p), snr_pre (snr_pre), snr_post (snr_post), p_local, p_global, in {
                 // compute speech absence probability estimation
                 let q = T::one() - p_local * p_global * p_frame;
+                let q = q.min(T::from(0.95).unwrap());
 
                 // compute conditional speech presence probability
                 let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows      // TODO: neccessary here?
 
                 let p_ = T::one() + (q / (T::one() - q)) * (T::one() + snr_pre) * T::exp(-nu);
                 let p_ = T::one() / p_;
@@ -369,8 +366,8 @@ where
 
         {   // noise spectrum estimation
             // average spectrum in frequency (S_f)
-            let w = 2;
-            let b = sspse::window::hann::<T>(w * 2 + 1).to_array();
+            let w = 1;
+            let b = sspse::window::hamming::<T>(w * 2 + 1).to_array();
 
             let y_pwr = spec_in.mapv(|v| v.norm_sqr());
             let y_padded = sspse::ft::extend_even(&y_pwr, w);
