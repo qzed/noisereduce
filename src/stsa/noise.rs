@@ -5,18 +5,18 @@ use ndarray::{azip, Array1, ArrayView1, ArrayViewMut1};
 use num::{Complex, Float};
 
 
-pub struct ExpTimeAvgNoise<T, V> {
+pub struct ExpTimeAvg<T, V> {
     voiced: Array1<bool>,
     alpha: T,
     vad: V,
 }
 
-impl<T, V> ExpTimeAvgNoise<T, V>
+impl<T, V> ExpTimeAvg<T, V>
 where
     T: Float,
 {
     pub fn new(block_size: usize, alpha: T, vad: V) -> Self {
-        ExpTimeAvgNoise {
+        ExpTimeAvg{
             voiced: Array1::from_elem(block_size, false),
             alpha,
             vad,
@@ -24,7 +24,7 @@ where
     }
 }
 
-impl<T, V> NoiseTracker<T> for ExpTimeAvgNoise<T, V>
+impl<T, V> NoiseTracker<T> for ExpTimeAvg<T, V>
 where
     T: Float,
     V: VoiceActivityDetector<T>,

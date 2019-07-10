@@ -1,7 +1,7 @@
 use sspse::ft;
 use sspse::proc;
 use sspse::stsa::gain::{LogMmse, Mmse};
-use sspse::stsa::noise::ExpTimeAvgNoise;
+use sspse::stsa::noise::ExpTimeAvg;
 use sspse::stsa::snr::DecisionDirected;
 use sspse::stsa::{self, Gain, Stsa};
 use sspse::vad::b::power::{self, PowerThresholdVad};
@@ -105,7 +105,7 @@ fn main() -> Result<(), Error> {
     // let vad = EnergyThresholdVad::new(noise_floor, vad_ratio).per_band();
 
     // set-up algorithm parts
-    let noise_tracker = ExpTimeAvgNoise::new(segment_len, noise_alpha, vad);
+    let noise_tracker = ExpTimeAvg::new(segment_len, noise_alpha, vad);
     let snr_est = DecisionDirected::new(snr_alpha);
     // let snr_est = MaximumLikelihood::new(segment_len, 0.725, 2.0);
 
