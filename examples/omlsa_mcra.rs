@@ -145,7 +145,6 @@ struct Proc<T> {
     spectrum_power_min: Array1<T>,
     spectrum_power_tmp: Array1<T>,
     gain_h: Array1<T>,
-    gain: Array1<T>,
     p_gain: Array1<T>,
     p_noise: Array1<T>,
     p_noise_alpha: T,
@@ -179,7 +178,6 @@ where
             spectrum_power_min: Array1::from_elem(block_size, T::zero()),
             spectrum_power_tmp: Array1::from_elem(block_size, T::zero()),
             gain_h: Array1::from_elem(block_size, T::one()),
-            gain: Array1::from_elem(block_size, T::one()),
             p_gain: Array1::from_elem(block_size, T::one()),
             p_noise: Array1::from_elem(block_size, T::one()),
             p_noise_alpha: T::from(0.2).unwrap(),
@@ -341,26 +339,19 @@ where
         }
 
         {   // compute gain_h and gain
-            let gain = &mut self.gain;
             let gain_h = &mut self.gain_h;
             let snr_pre = &self.snr_pre;
             let snr_post = &self.snr_post;
-            let p = &self.p_gain;
 
             let nu_max = self.nu_max;
             let nu_min = self.nu_min;
-            let gain_min = self.gain_min;
             let half = T::from(0.5).unwrap();
 
-            azip!(mut gain (gain), mut gain_h (gain_h), snr_pre (snr_pre), snr_post (snr_post) p (p) in {
+            azip!(mut gain_h (gain_h), snr_pre (snr_pre), snr_post (snr_post) in {
                 let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows      // TODO: neccessary here?
+                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows
 
-                let gh = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
-                let g = gh.powf(p) * gain_min.powf(T::one() - p);
-
-                *gain_h = gh;
-                *gain = g;
+                *gain_h = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
             });
         }
 
@@ -433,10 +424,13 @@ where
             });
         }
 
-        // apply gain
-        azip!(mut spec_out (spec_out), spec_in (spec_in), gain (&self.gain) in {
-            *spec_out = spec_in * gain;
-        });
+        {   // apply gain
+            let gain_min = self.gain_min;
+
+            azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h), p (&self.p_gain) in {
+                *spec_out = spec_in * gain_h.powf(p) * gain_min.powf(T::one() - p);
+            });
+        }
 
         self.frame += 1;
     }
