@@ -1,5 +1,5 @@
 use sspse::ft;
-use sspse::math::expint;
+use sspse::math::{expint, NumCastUnchecked};
 use sspse::proc::{self, Processor};
 use sspse::wave::WavReaderExt;
 use sspse::window::{self as W, WindowFunction};
@@ -196,7 +196,7 @@ where
 
 impl<T> Processor<T> for Proc<T>
 where
-    T: Float + FloatConst + NumAssign,
+    T: Float + FloatConst + NumAssign + NumCastUnchecked,
 {
     fn block_size(&self) -> usize {
         self.block_size
