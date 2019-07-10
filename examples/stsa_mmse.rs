@@ -110,9 +110,9 @@ fn main() -> Result<(), Error> {
     // let snr_est = MaximumLikelihood::new(segment_len, 0.725, 2.0);
 
     let gain_fn: Box<dyn Gain<_>> = if logmmse {
-        Box::new(LogMmse::new())
+        Box::new(LogMmse::default())
     } else {
-        Box::new(Mmse::new())
+        Box::new(Mmse::default())
     };
 
     let mut stsa = Stsa::new(segment_len, gain_fn, snr_est, noise_tracker);

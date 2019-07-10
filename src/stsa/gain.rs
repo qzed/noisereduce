@@ -12,15 +12,17 @@ pub struct Mmse<T> {
 }
 
 impl<T: Float> Mmse<T> {
-    pub fn new() -> Self {
+    pub fn new(nu_min: T, nu_max: T) -> Self {
+        Mmse { nu_min, nu_max }
+    }
+}
+
+impl<T: Float> Default for Mmse<T> {
+    fn default() -> Self {
         Mmse {
             nu_min: T::from(1e-50).unwrap(),
             nu_max: T::from(500.0).unwrap(),
         }
-    }
-
-    pub fn with_parameters(nu_min: T, nu_max: T) -> Self {
-        Mmse { nu_min, nu_max }
     }
 }
 
@@ -57,15 +59,17 @@ pub struct LogMmse<T> {
 }
 
 impl<T: Float> LogMmse<T> {
-    pub fn new() -> Self {
+    pub fn new(nu_min: T, nu_max: T) -> Self {
+        LogMmse { nu_min, nu_max }
+    }
+}
+
+impl<T: Float> Default for LogMmse<T> {
+    fn default() -> Self {
         LogMmse {
             nu_min: T::from(1e-50).unwrap(),
             nu_max: T::from(500.0).unwrap(),
         }
-    }
-
-    pub fn with_parameters(nu_min: T, nu_max: T) -> Self {
-        LogMmse { nu_min, nu_max }
     }
 }
 
