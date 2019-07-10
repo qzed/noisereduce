@@ -8,7 +8,7 @@ use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
 use ndarray::{azip, s, Array1, ArrayView1, ArrayViewMut1, Axis};
-use num::{traits::FloatConst, Complex, Float};
+use num::{traits::FloatConst, traits::NumAssign, Complex, Float};
 
 
 fn app() -> App<'static, 'static> {
@@ -198,7 +198,7 @@ where
 
 impl<T> Processor<T> for Proc<T>
 where
-    T: Float + FloatConst,
+    T: Float + FloatConst + NumAssign,
 {
     fn block_size(&self) -> usize {
         self.block_size
@@ -238,13 +238,15 @@ where
             let snr_pre_avg = &mut self.snr_pre_avg;
             let beta = self.snr_pre_avg_beta;
 
+            // TODO: check if we really need the old a priori SNE here...
+
             azip!(mut snr_pre_avg (snr_pre_avg), snr_pre (&snr_pre_old) in {
                 *snr_pre_avg = beta * *snr_pre_avg + (T::one() - beta) * snr_pre;
             });
 
             // a priori SNR averaging over frequencies
-            let w_local = 4;
-            let w_global = 25;
+            let w_local = 1;
+            let w_global = 15;
 
             let h_local = sspse::window::hamming::<T>(w_local * 2 + 1).to_array();
             let h_global = sspse::window::hamming::<T>(w_global * 2 + 1).to_array();
@@ -255,13 +257,17 @@ where
 
             for k in 0..self.block_size {
                 for i in -(w_local as isize)..=(w_local as isize) {
-                    snr_pre_avg_local[k] =
-                        snr_pre_avg_padded[k + w_global] * h_local[(i + w_local as isize) as usize];
+                    let idx_window = (i + w_local as isize) as usize;
+                    let idx_spectr = (i + k as isize + w_global as isize) as usize;
+
+                    snr_pre_avg_local[k] += snr_pre_avg_padded[idx_spectr] * h_local[idx_window];
                 }
 
                 for i in -(w_global as isize)..=(w_global as isize) {
-                    snr_pre_avg_global[k] = snr_pre_avg_padded[k + w_global]
-                        * h_global[(i + w_global as isize) as usize];
+                    let idx_window = (i + w_global as isize) as usize;
+                    let idx_spectr = (i + k as isize + w_global as isize) as usize;
+
+                    snr_pre_avg_global[k] += snr_pre_avg_padded[idx_spectr] * h_global[idx_window];
                 }
             }
 
