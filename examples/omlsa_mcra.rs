@@ -1,8 +1,12 @@
 use sspse::ft;
-use sspse::math::{expint, NumCastUnchecked};
+use sspse::math::NumCastUnchecked;
 use sspse::proc::{self, Processor};
 use sspse::wave::WavReaderExt;
 use sspse::window::{self as W, WindowFunction};
+
+use sspse::stsa::{Gain, SnrEstimator};
+use sspse::stsa::gain::LogMmse;
+use sspse::stsa::snr::DecisionDirected;
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
@@ -144,17 +148,13 @@ struct Proc<T> {
     spectrum_power_alpha: T,
     spectrum_power_min: Array1<T>,
     spectrum_power_tmp: Array1<T>,
-    gain_h: Array1<T>,
+    gain_h1: Array1<T>,
     p_gain: Array1<T>,
     p_noise: Array1<T>,
     p_noise_alpha: T,
     p_noise_threshold: T,
     gain_min: T,
     snr_alpha: T,
-    snr_pre_max: T,
-    snr_post_max: T,
-    nu_min: T,
-    nu_max: T,
     snr_pre_avg_frame: T,
     snr_pre_avg_peak: T,
 }
@@ -177,17 +177,13 @@ where
             spectrum_power_alpha: T::from(0.8).unwrap(),
             spectrum_power_min: Array1::from_elem(block_size, T::zero()),
             spectrum_power_tmp: Array1::from_elem(block_size, T::zero()),
-            gain_h: Array1::from_elem(block_size, T::one()),
+            gain_h1: Array1::from_elem(block_size, T::one()),
             p_gain: Array1::from_elem(block_size, T::one()),
             p_noise: Array1::from_elem(block_size, T::one()),
             p_noise_alpha: T::from(0.2).unwrap(),
             p_noise_threshold: T::from(5).unwrap(),
             gain_min: T::from(0.001).unwrap(),
             snr_alpha: T::from(0.92).unwrap(),
-            snr_pre_max: T::from(1e30).unwrap(),
-            snr_post_max: T::from(1e30).unwrap(),
-            nu_min: T::from(1e-50).unwrap(),
-            nu_max: T::from(5e2).unwrap(),
             snr_pre_avg_frame: T::from(1.0).unwrap(),
             snr_pre_avg_peak: T::from(1.0).unwrap(),
         }
@@ -203,42 +199,22 @@ where
     }
 
     fn process(&mut self, spec_in: ArrayView1<Complex<T>>, spec_out: ArrayViewMut1<Complex<T>>) {
-        let snr_pre_old = self.snr_pre.clone();
-
-        {   // update a priori and a posteriori SNR
-            let snr_pre = &mut self.snr_pre;
-            let snr_post = &mut self.snr_post;
-            let noise_pwr = &self.noise_power;
-            let gain_h = &self.gain_h;
-
-            let alpha = self.snr_alpha;
-            let snr_pre_max = self.snr_pre_max;
-            let snr_post_max = self.snr_post_max;
-
-            azip!(
-                mut snr_pre (snr_pre),
-                mut snr_post (snr_post),
-                spectrum (spec_in),
-                noise_power (noise_pwr),
-                gain_h (gain_h)
-            in {
-                let snr_post_ = spectrum.norm_sqr() / noise_power;
-                let snr_pre_ = alpha * gain_h.powi(2) * *snr_post
-                    + (T::one() - alpha) * (snr_post_ - T::one()).max(T::zero());
-
-                *snr_pre = snr_pre_.min(snr_pre_max);
-                *snr_post = snr_post_.min(snr_post_max);
-            });
-        }
+        // update a priori and a posteriori SNR
+        DecisionDirected::new(self.snr_alpha).update(
+            spec_in,
+            self.noise_power.view(),
+            self.gain_h1.view(),
+            self.snr_pre.view_mut(),
+            self.snr_post.view_mut()
+        );
 
         {   // compute speech probability for gain (p_gain)
             // a priori SNR averaging over time
             let snr_pre_avg = &mut self.snr_pre_avg;
+            let snr_pre = &self.snr_pre;
             let beta = self.snr_pre_avg_beta;
 
-            // TODO: check if we really need the old a priori SNE here...
-
-            azip!(mut snr_pre_avg (snr_pre_avg), snr_pre (&snr_pre_old) in {
+            azip!(mut snr_pre_avg (snr_pre_avg), snr_pre (snr_pre) in {
                 *snr_pre_avg = beta * *snr_pre_avg + (T::one() - beta) * snr_pre;
             });
 
@@ -338,22 +314,9 @@ where
             });
         }
 
-        {   // compute gain_h and gain
-            let gain_h = &mut self.gain_h;
-            let snr_pre = &self.snr_pre;
-            let snr_post = &self.snr_post;
-
-            let nu_max = self.nu_max;
-            let nu_min = self.nu_min;
-            let half = T::from(0.5).unwrap();
-
-            azip!(mut gain_h (gain_h), snr_pre (snr_pre), snr_post (snr_post) in {
-                let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-                let nu = nu.max(nu_min).min(nu_max);            // prevent over/underflows
-
-                *gain_h = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
-            });
-        }
+        // compute gain for speech presence
+        LogMmse::default()
+            .update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
 
         {   // noise spectrum estimation
             // average spectrum in frequency (S_f)
@@ -424,13 +387,10 @@ where
             });
         }
 
-        {   // apply gain
-            let gain_min = self.gain_min;
-
-            azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h), p (&self.p_gain) in {
-                *spec_out = spec_in * gain_h.powf(p) * gain_min.powf(T::one() - p);
-            });
-        }
+        // apply gain
+        azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
+            *spec_out = spec_in * gain_h.powf(p) * self.gain_min.powf(T::one() - p);
+        });
 
         self.frame += 1;
     }
