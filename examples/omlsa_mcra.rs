@@ -7,8 +7,8 @@ use sspse::window::{self as W, WindowFunction};
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
-use ndarray::{s, azip, Axis, Array1, ArrayView1, ArrayViewMut1};
-use num::{Complex, Float, traits::FloatConst};
+use ndarray::{azip, s, Array1, ArrayView1, ArrayViewMut1, Axis};
+use num::{traits::FloatConst, Complex, Float};
 
 
 fn app() -> App<'static, 'static> {
@@ -31,9 +31,9 @@ fn app() -> App<'static, 'static> {
 fn main() -> Result<(), Error> {
     let matches = app().get_matches();
 
-    let path_in  = matches.value_of_os("input").unwrap();
+    let path_in = matches.value_of_os("input").unwrap();
     let path_out = matches.value_of_os("output");
-    let plot     = matches.is_present("plot");
+    let plot = matches.is_present("plot");
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
@@ -207,7 +207,7 @@ where
     fn process(&mut self, spec_in: ArrayView1<Complex<T>>, spec_out: ArrayViewMut1<Complex<T>>) {
         let snr_pre_old = self.snr_pre.clone();
 
-        {   // update a priori, a posteriori SNR and nu
+        {   // update a priori and a posteriori SNR
             let snr_pre = &mut self.snr_pre;
             let snr_post = &mut self.snr_post;
             let noise_pwr = &self.noise_power;
@@ -246,7 +246,7 @@ where
             let w_local = 4;
             let w_global = 25;
 
-            let h_local  = sspse::window::hamming::<T>(w_local * 2 + 1).to_array();
+            let h_local = sspse::window::hamming::<T>(w_local * 2 + 1).to_array();
             let h_global = sspse::window::hamming::<T>(w_global * 2 + 1).to_array();
 
             let snr_pre_avg_padded = sspse::ft::extend_zero(&self.snr_pre_avg, w_global);
@@ -255,15 +255,18 @@ where
 
             for k in 0..self.block_size {
                 for i in -(w_local as isize)..=(w_local as isize) {
-                    snr_pre_avg_local[k] = snr_pre_avg_padded[k + w_global] * h_local[(i + w_local as isize) as usize];
+                    snr_pre_avg_local[k] =
+                        snr_pre_avg_padded[k + w_global] * h_local[(i + w_local as isize) as usize];
                 }
 
                 for i in -(w_global as isize)..=(w_global as isize) {
-                    snr_pre_avg_global[k] = snr_pre_avg_padded[k + w_global] * h_global[(i + w_global as isize) as usize];
+                    snr_pre_avg_global[k] = snr_pre_avg_padded[k + w_global]
+                        * h_global[(i + w_global as isize) as usize];
                 }
             }
 
-            let snr_pre_avg_frame = self.snr_pre_avg.fold(T::zero(), |a, b| a + *b) / T::from(self.snr_pre_avg.len()).unwrap();
+            let snr_pre_avg_frame = self.snr_pre_avg.fold(T::zero(), |a, b| a + *b)
+                / T::from(self.snr_pre_avg.len()).unwrap();
 
             // compute probabilities
             let snr_pre_avg_min = T::from(1e-3).unwrap();
