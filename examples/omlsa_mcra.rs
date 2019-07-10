@@ -281,9 +281,9 @@ where
             let snr_pre_avg_peak_max = T::from(1e3).unwrap();
 
             let p_local = snr_pre_avg_local.mapv_into(|v| {
-                if v < snr_pre_avg_min {
+                if v <= snr_pre_avg_min {
                     T::zero()
-                } else if v > snr_pre_avg_max {
+                } else if v >= snr_pre_avg_max {
                     T::one()
                 } else {
                     T::ln(v / snr_pre_avg_min) / T::ln(snr_pre_avg_max / snr_pre_avg_min)
@@ -291,9 +291,9 @@ where
             });
 
             let p_global = snr_pre_avg_global.mapv_into(|v| {
-                if v < snr_pre_avg_min {
+                if v <= snr_pre_avg_min {
                     T::zero()
-                } else if v > snr_pre_avg_max {
+                } else if v >= snr_pre_avg_max {
                     T::one()
                 } else {
                     T::ln(v / snr_pre_avg_min) / T::ln(snr_pre_avg_max / snr_pre_avg_min)
