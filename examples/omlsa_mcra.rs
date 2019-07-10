@@ -271,8 +271,8 @@ where
                 }
             }
 
-            let snr_pre_avg_frame = self.snr_pre_avg.fold(T::zero(), |a, b| a + *b)
-                / T::from(self.snr_pre_avg.len()).unwrap();
+            let norm = T::one() / T::from(self.snr_pre_avg.len()).unwrap();
+            let snr_pre_avg_frame = self.snr_pre_avg.fold(T::zero(), |a, b| a + *b * norm);
 
             // compute probabilities
             let snr_pre_avg_min = T::from(1e-3).unwrap();
