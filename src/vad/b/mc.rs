@@ -39,7 +39,7 @@ where
         tracking_len: usize,
     ) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         assert!(window.len() % 2 != 0, "window must have odd size");
 

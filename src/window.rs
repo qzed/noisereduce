@@ -1,7 +1,7 @@
 use crate::math::{bessel, NumCastUnchecked};
 
 use ndarray::Array1;
-use num::{traits::FloatConst, Float};
+use num::{traits::FloatConst, traits::Zero, Float};
 
 
 #[allow(clippy::len_without_is_empty)]
@@ -23,9 +23,13 @@ pub trait WindowFunction<T> {
 
     fn to_array(&self) -> Array1<T>
     where
-        Self: Sized,
+        T: Zero + Clone,
     {
-        Array1::from_iter(self.iter())
+        let mut w = Array1::zeros(self.len());
+        for i in 0..self.len() {
+            w[i] = self.coef(i);
+        }
+        w
     }
 
     fn with_len(self, len: usize) -> Self

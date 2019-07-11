@@ -42,8 +42,8 @@ where
         q_max: T,
     ) -> Self
     where
-        W1: WindowFunction<T>,
-        W2: WindowFunction<T>,
+        W1: WindowFunction<T> + ?Sized,
+        W2: WindowFunction<T> + ?Sized,
     {
         assert!(h_local.len() % 2 == 1, "local window function must have odd size");
         assert!(h_global.len() % 2 == 1, "global window function must have odd size");

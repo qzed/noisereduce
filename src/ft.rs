@@ -348,21 +348,21 @@ where
 {
     pub fn new<W>(window: &W) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         Self::with_fft(window, FFTplanner::new(false).plan_fft(fft_len))
     }
 
     pub fn with_fft<W>(window: &W, fft: Arc<dyn FFT<T>>) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         StftBuilder {
             fft,
@@ -554,21 +554,21 @@ where
 {
     pub fn new<W>(window: &W) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         Self::with_len(window, window.len())
     }
 
     pub fn with_len<W>(window: &W, fft_len: usize) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         Self::with_ifft(window, FFTplanner::new(true).plan_fft(fft_len))
     }
 
     pub fn with_ifft<W>(window: &W, ifft: Arc<dyn FFT<T>>) -> Self
     where
-        W: WindowFunction<T>,
+        W: WindowFunction<T> + ?Sized,
     {
         IstftBuilder {
             ifft,
