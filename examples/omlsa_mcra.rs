@@ -208,6 +208,9 @@ where
     }
 
     fn process(&mut self, spec_in: ArrayView1<Complex<T>>, spec_out: ArrayViewMut1<Complex<T>>) {
+        // noise spectrum estimation
+        self.noise_est.update(spec_in, self.noise_power.view_mut());
+
         // update a priori and a posteriori SNR
         self.snr_est.update(spec_in, self.noise_power.view(), self.gain_h1.view(), self.snr_pre.view_mut(), self.snr_post.view_mut());
 
@@ -319,9 +322,6 @@ where
 
         // compute gain for speech presence
         self.gain_fn.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
-
-        // noise spectrum estimation
-        self.noise_est.update(spec_in, self.noise_power.view_mut());
 
         // apply gain
         azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
