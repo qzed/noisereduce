@@ -119,7 +119,7 @@ fn main() -> Result<(), Error> {
     stsa.set_noise_estimate(stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
     // main algorithm loop over spectrum frames
-    proc::utils::process(&mut stsa, &spectrum, &mut spectrum_out);
+    proc::utils::process_spectrum(&mut stsa, &spectrum, &mut spectrum_out);
 
     // perform istft
     let out = istft.process(&spectrum_out);

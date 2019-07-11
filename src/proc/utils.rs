@@ -4,7 +4,7 @@ use ndarray::{ArrayBase, Axis, Data, DataMut, Ix2};
 use num::Complex;
 
 
-pub fn process<T, P, D1, D2>(processor: P, input: &ArrayBase<D1, Ix2>, output: &mut ArrayBase<D2, Ix2>)
+pub fn process_spectrum<T, P, D1, D2>(processor: P, input: &ArrayBase<D1, Ix2>, output: &mut ArrayBase<D2, Ix2>)
 where
     P: Processor<T>,
     D1: Data<Elem = Complex<T>>,

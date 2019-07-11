@@ -78,7 +78,7 @@ fn main() -> Result<(), Error> {
     let mut p = setup_proc(segment_len);
     p.set_noise_estimate(sspse::stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
-    proc::utils::process(p, &spectrum, &mut spectrum_out);
+    proc::utils::process_spectrum(p, &spectrum, &mut spectrum_out);
 
     // perform istft
     let out = istft.process(&spectrum_out);
@@ -144,7 +144,7 @@ where
     let w = 1;
     let b = W::hamming::<T>(w * 2 + 1);
     let alpha_s = T::from(0.8).unwrap();
-    let alpha_p = T::from(0.2).unwrap();
+    let alpha_p = T::from(0.2).unwrap();        // 0.97 for heavy noise seems to reduce musical noise
     let alpha_d = T::from(0.95).unwrap();
     let delta = T::from(5.0).unwrap();
     let vad = MinimaControlledVad::new(block_size, &b, alpha_s, alpha_p, delta, 125);
