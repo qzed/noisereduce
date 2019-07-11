@@ -143,7 +143,7 @@ where
 
 pub fn spectrum_to_visual<D, F>(spectrum: &ArrayBase<D, Ix2>, min: F, max: F) -> Array2<F>
 where
-    D: DataMut<Elem = Complex<F>>,
+    D: Data<Elem = Complex<F>>,
     F: Float,
 {
     let mut output = Array2::zeros(spectrum.raw_dim());
