@@ -1,16 +1,15 @@
 use sspse::ft;
 use sspse::math::NumCastUnchecked;
 use sspse::proc::{self, Processor};
-use sspse::wave::WavReaderExt;
-use sspse::window as W;
-
-use sspse::stsa::{Gain, SnrEstimator, NoiseTracker, SetNoiseEstimate};
 use sspse::stsa::gain::LogMmse;
-use sspse::stsa::snr::DecisionDirected;
 use sspse::stsa::noise::ProbabilisticExpTimeAvg;
-use sspse::vad::b::SpeechProbabilityEstimator;
+use sspse::stsa::snr::DecisionDirected;
+use sspse::stsa::{Gain, NoiseTracker, SetNoiseEstimate, SnrEstimator};
 use sspse::vad::b::mc::MinimaControlledVad;
 use sspse::vad::b::soft::SoftDecisionProbabilityEstimator;
+use sspse::vad::b::SpeechProbabilityEstimator;
+use sspse::wave::WavReaderExt;
+use sspse::window as W;
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
@@ -138,7 +137,6 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-
 fn setup_proc<T>(block_size: usize) -> impl Processor<T> + SetNoiseEstimate<T>
 where
     T: Float + FloatConst + NumCastUnchecked + NumAssign,
@@ -168,7 +166,17 @@ where
     let snr_pre_peak_min = T::from(1.0).unwrap();
     let snr_pre_peak_max = T::from(1e5).unwrap();
     let q_max = T::from(0.95).unwrap();
-    let p_est = SoftDecisionProbabilityEstimator::new(block_size, beta, &h_local, &h_global, snr_pre_min, snr_pre_max, snr_pre_peak_min, snr_pre_peak_max, q_max);
+    let p_est = SoftDecisionProbabilityEstimator::new(
+        block_size,
+        beta,
+        &h_local,
+        &h_global,
+        snr_pre_min,
+        snr_pre_max,
+        snr_pre_peak_min,
+        snr_pre_peak_max,
+        q_max,
+    );
 
     // parameters for gain computation
     let gain_fn = LogMmse::default();
@@ -210,7 +218,7 @@ where
             noise_est,
             snr_est,
             p_est,
-            gain_fn: gain_h1
+            gain_fn: gain_h1,
         }
     }
 }
@@ -241,13 +249,29 @@ where
         self.noise_est.update(spec_in, self.noise_power.view_mut());
 
         // update a priori and a posteriori SNR
-        self.snr_est.update(spec_in, self.noise_power.view(), self.gain_h1.view(), self.snr_pre.view_mut(), self.snr_post.view_mut());
+        self.snr_est.update(
+            spec_in,
+            self.noise_power.view(),
+            self.gain_h1.view(),
+            self.snr_pre.view_mut(),
+            self.snr_post.view_mut(),
+        );
 
         // compute speech probability for gain (p_gain)
-        self.p_est.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.p_gain.view_mut());
+        self.p_est.update(
+            spec_in,
+            self.snr_pre.view(),
+            self.snr_post.view(),
+            self.p_gain.view_mut(),
+        );
 
         // compute gain for speech presence
-        self.gain_fn.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
+        self.gain_fn.update(
+            spec_in,
+            self.snr_pre.view(),
+            self.snr_post.view(),
+            self.gain_h1.view_mut(),
+        );
 
         // apply gain
         azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
