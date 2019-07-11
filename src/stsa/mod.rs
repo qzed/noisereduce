@@ -370,3 +370,52 @@ where
         });
     }
 }
+
+
+pub struct Subtraction<T> {
+    block_size: usize,
+    factor: T,
+    post_gain: T,
+    noise_est: Array1<T>,
+}
+
+impl<T> Subtraction<T>
+where
+    T: Float,
+{
+    pub fn new(block_size: usize, factor: T, post_gain: T) -> Self {
+        Subtraction {
+            block_size,
+            factor,
+            post_gain,
+            noise_est: Array1::zeros(block_size),
+        }
+    }
+}
+
+impl<T> SetNoiseEstimate<T> for Subtraction<T>
+where
+    T: Float,
+{
+    fn set_noise_estimate(&mut self, noise: ArrayView1<T>) {
+        self.noise_est.assign(&noise);
+    }
+}
+
+impl<T> Processor<T> for Subtraction<T>
+where
+    T: Float,
+{
+    fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    fn process(&mut self, spec_in: ArrayView1<Complex<T>>, mut spec_out: ArrayViewMut1<Complex<T>>) {
+        azip!(mut spec_out, spec_in, noise_est (&self.noise_est) in {
+            let r = spec_in.norm() - self.factor * noise_est;
+            let t = spec_in.arg();
+
+            *spec_out = Complex::from_polar(&T::zero().max(r), &t) * self.post_gain;
+        });
+    }
+}

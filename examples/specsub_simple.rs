@@ -1,11 +1,13 @@
 use sspse::ft;
+use sspse::proc;
+use sspse::stsa::{self, Subtraction, SetNoiseEstimate};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{s, Axis};
 use num::Complex;
 
 
@@ -34,57 +36,43 @@ fn main() -> Result<(), Error> {
     let plot = matches.is_present("plot");
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f32>()?;
+    let (samples, samples_spec) = WavReader::open(path_in)?.collect_convert_dyn::<f64>()?;
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // convert real to complex
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
     // fft parameters
-    let fft_len     = 256;
-    let segment_len = 256;
-    let overlap     = 192;
+    let segment_len = (samples_spec.sample_rate as f64 * 0.02) as usize;
+    let overlap = segment_len / 2;
 
     // build window for fft
     let window = W::periodic(W::sqrt(W::hann(segment_len)));
 
     // build STFT and compute complex spectrum
-    let mut stft = ft::StftBuilder::with_len(&window, fft_len)
+    let mut stft = ft::StftBuilder::new(&window)
         .overlap(overlap)
         .padding(ft::Padding::Zero)
         .build();
 
-    let mut istft = ft::IstftBuilder::with_len(&window, fft_len)
+    let mut istft = ft::IstftBuilder::new(&window)
         .overlap(overlap)
         .method(ft::InversionMethod::Weighted)
         .remove_padding(true)
         .build();
 
     // compute spectrum
-    let spectrum_orig = stft.process(&samples_c);
+    let mut spectrum = stft.process(&samples_c);
+    let spectrum_orig = spectrum.clone();
 
-    let magnitude_orig = spectrum_orig.mapv(|v| v.norm());
-    let phase_orig = spectrum_orig.mapv(|v| v.arg());
-
-    // noise estimation
-    let noise_est_len = 3;
-    let mut noise_est = Array1::zeros(magnitude_orig.shape()[1]);
-    for i in 0..noise_est_len {
-        noise_est += &magnitude_orig.index_axis(Axis(0), i);
-    }
-    noise_est.mapv_inplace(|v| v / noise_est_len as f32);
-
-    // spectral substraction and recombination
+    // spectral substraction
     let factor = 1.0;
     let post_gain = 1.5;
 
-    let mut spectrum = Array2::zeros(spectrum_orig.raw_dim());
-    for ((i, j), v) in spectrum.indexed_iter_mut() {
-        let r = magnitude_orig[(i, j)] - factor * noise_est[j];
-        let t = phase_orig[(i, j)];
+    let mut p = Subtraction::new(segment_len, factor, post_gain);
+    p.set_noise_estimate(stsa::utils::noise_amplitude_est(&spectrum_orig.slice(s![..3, ..])).view());
 
-        *v = Complex::from_polar(&r.max(0.0), &t);
-    }
+    proc::utils::process_spectrum(p, &spectrum_orig, &mut spectrum);
 
     // compute signal from spectrum
     let out = istft.process(&spectrum);
@@ -103,7 +91,7 @@ fn main() -> Result<(), Error> {
 
         let mut writer = hound::WavWriter::create(path_out, out_spec)?;
         for x in out.iter() {
-            writer.write_sample(*x)?;
+            writer.write_sample(*x as f32)?;
         }
         writer.finalize()?;
     }
