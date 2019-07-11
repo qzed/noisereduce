@@ -54,6 +54,7 @@ where
     }
 }
 
+#[allow(clippy::deref_addrof)]
 impl<T> VoicePresenceDetector<T> for MinimaControlledVad<T>
 where
     T: Float + NumAssign,
