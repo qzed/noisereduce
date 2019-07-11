@@ -74,8 +74,9 @@ where
         self.spectrum_padded.slice_mut(s![w+self.block_size..]).fill(T::zero());
 
         // average spectrum over frequency (S_f)
-        self.spectrum_f.fill(T::zero());
         for k in 0..self.block_size {
+            self.spectrum_f[k] = T::zero();
+
             for i in -(w as isize)..=(w as isize) {
                 let idx_window = (i + w as isize) as usize;
                 let idx_spectr = (i + k as isize + w as isize) as usize;
