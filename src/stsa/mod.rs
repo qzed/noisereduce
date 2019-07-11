@@ -5,6 +5,7 @@ pub mod utils;
 
 
 use crate::proc::Processor;
+use crate::vad::b::SpeechProbabilityEstimator;
 
 use ndarray::{azip, Array1, ArrayView1, ArrayViewMut1};
 use num::{Complex, Float};
@@ -270,6 +271,102 @@ where
         // apply gain
         azip!(mut spectrum_out, spectrum_in, gain (&self.gain) in {
             *spectrum_out = spectrum_in * gain.min(T::one())
+        });
+    }
+}
+
+
+// Modified (Short-Time) Spectral Amplitude, i.e. for Optimally-Modified
+// Log-Spectral Amplitude (OM-LSA) implementation.
+pub struct ModStsa<T, N, P, S, G> {
+    block_size: usize,
+    snr_pre: Array1<T>,
+    snr_post: Array1<T>,
+    noise_power: Array1<T>,
+    gain_h1: Array1<T>,
+    p_gain: Array1<T>,
+    gain_min: T,
+
+    noise_est: N,
+    p_est: P,
+    snr_est: S,
+    gain_fn: G,
+}
+
+impl<T, N, P, S, G> ModStsa<T, N, P, S, G>
+where
+    T: Float,
+{
+    pub fn new(block_size: usize, noise_est: N, p_est: P, snr_est: S, gain_h1: G, gain_min: T) -> Self {
+        ModStsa {
+            block_size,
+            snr_pre: Array1::zeros(block_size),
+            snr_post: Array1::zeros(block_size),
+            noise_power: Array1::zeros(block_size),
+            gain_h1: Array1::zeros(block_size),
+            p_gain: Array1::zeros(block_size),
+            gain_min,
+            noise_est,
+            snr_est,
+            p_est,
+            gain_fn: gain_h1,
+        }
+    }
+}
+
+impl<T, N, P, S, G> SetNoiseEstimate<T> for ModStsa<T, N, P, S, G>
+where
+    T: Float,
+{
+    fn set_noise_estimate(&mut self, noise: ArrayView1<T>) {
+        self.noise_power.assign(&noise);
+    }
+}
+
+impl<T, N, P, S, G> Processor<T> for ModStsa<T, N, P, S, G>
+where
+    T: Float,
+    N: NoiseTracker<T>,
+    S: SnrEstimator<T>,
+    P: SpeechProbabilityEstimator<T>,
+    G: Gain<T>,
+{
+    fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    fn process(&mut self, spec_in: ArrayView1<Complex<T>>, spec_out: ArrayViewMut1<Complex<T>>) {
+        // noise spectrum estimation
+        self.noise_est.update(spec_in, self.noise_power.view_mut());
+
+        // update a priori and a posteriori SNR
+        self.snr_est.update(
+            spec_in,
+            self.noise_power.view(),
+            self.gain_h1.view(),
+            self.snr_pre.view_mut(),
+            self.snr_post.view_mut(),
+        );
+
+        // compute speech probability for gain (p_gain)
+        self.p_est.update(
+            spec_in,
+            self.snr_pre.view(),
+            self.snr_post.view(),
+            self.p_gain.view_mut(),
+        );
+
+        // compute gain for speech presence
+        self.gain_fn.update(
+            spec_in,
+            self.snr_pre.view(),
+            self.snr_post.view(),
+            self.gain_h1.view_mut(),
+        );
+
+        // apply gain
+        azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
+            *spec_out = spec_in * gain_h.powf(p) * self.gain_min.powf(T::one() - p);
         });
     }
 }
