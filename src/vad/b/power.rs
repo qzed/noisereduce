@@ -19,7 +19,7 @@ impl<T> VoiceActivityDetector<T> for PowerThresholdVad<T>
 where
     T: Float,
 {
-    fn detect_into<D, B>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<B, Ix1>)
+    fn detect_into<D, B>(&mut self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<B, Ix1>)
     where
         D: Data<Elem = Complex<T>>,
         B: DataMut<Elem = bool>,
@@ -34,7 +34,7 @@ impl<T> VoicePresenceDetector<T> for PowerThresholdVad<T>
 where
     T: Float,
 {
-    fn detect_into<D, E>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
+    fn detect_into<D, E>(&mut self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
     where
         D: Data<Elem = Complex<T>>,
         E: DataMut<Elem = T>,

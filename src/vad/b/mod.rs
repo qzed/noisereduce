@@ -1,5 +1,6 @@
 //! Per Frequency-Band Voice Activity Detection.
 
+pub mod mc;
 pub mod power;
 
 use ndarray::{Array1, ArrayBase, Data, DataMut, Ix1};
@@ -7,12 +8,12 @@ use num::Complex;
 
 
 pub trait VoiceActivityDetector<T> {
-    fn detect_into<D, B>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<B, Ix1>)
+    fn detect_into<D, B>(&mut self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<B, Ix1>)
     where
         D: Data<Elem = Complex<T>>,
         B: DataMut<Elem = bool>;
 
-    fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> Array1<bool>
+    fn detect<D>(&mut self, spectrum: &ArrayBase<D, Ix1>) -> Array1<bool>
     where
         D: Data<Elem = Complex<T>>,
     {
@@ -23,12 +24,12 @@ pub trait VoiceActivityDetector<T> {
 }
 
 pub trait VoicePresenceDetector<T> {
-    fn detect_into<D, E>(&self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
+    fn detect_into<D, E>(&mut self, spectrum: &ArrayBase<D, Ix1>, decision: &mut ArrayBase<E, Ix1>)
     where
         D: Data<Elem = Complex<T>>,
         E: DataMut<Elem = T>;
 
-    fn detect<D>(&self, spectrum: &ArrayBase<D, Ix1>) -> Array1<T>
+    fn detect<D>(&mut self, spectrum: &ArrayBase<D, Ix1>) -> Array1<T>
     where
         D: Data<Elem = Complex<T>>,
         T: Clone + num::Zero,

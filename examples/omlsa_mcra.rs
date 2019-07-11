@@ -4,9 +4,11 @@ use sspse::proc::{self, Processor};
 use sspse::wave::WavReaderExt;
 use sspse::window::{self as W, WindowFunction};
 
-use sspse::stsa::{Gain, SnrEstimator};
+use sspse::stsa::{Gain, SnrEstimator, NoiseTracker};
 use sspse::stsa::gain::LogMmse;
 use sspse::stsa::snr::DecisionDirected;
+use sspse::stsa::noise::ProbabilisticExpTimeAvg;
+use sspse::vad::b::mc::MinimaControlledVad;
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
@@ -143,27 +145,39 @@ struct Proc<T> {
     snr_pre_avg_beta: T,
     snr_post: Array1<T>,
     noise_power: Array1<T>,
-    noise_power_alpha: T,
-    spectrum_power_avg: Array1<T>,
-    spectrum_power_alpha: T,
-    spectrum_power_min: Array1<T>,
-    spectrum_power_tmp: Array1<T>,
     gain_h1: Array1<T>,
     p_gain: Array1<T>,
-    p_noise: Array1<T>,
-    p_noise_alpha: T,
-    p_noise_threshold: T,
     gain_min: T,
-    snr_alpha: T,
     snr_pre_avg_frame: T,
     snr_pre_avg_peak: T,
+
+    gain_fn: LogMmse<T>,
+    snr_est: DecisionDirected<T>,
+    noise_est: ProbabilisticExpTimeAvg<T, MinimaControlledVad<T>>,
 }
 
 impl<T> Proc<T>
 where
-    T: Float,
+    T: Float + FloatConst,
 {
     pub fn new(block_size: usize) -> Self {
+        // parameters for noise spectrum estimation
+        let w = 1;
+        let b = sspse::window::hamming::<T>(w * 2 + 1);
+        let alpha_s = T::from(0.8).unwrap();
+        let alpha_p = T::from(0.2).unwrap();
+        let alpha_d = T::from(0.95).unwrap();
+        let delta = T::from(5.0).unwrap();
+        let vad = MinimaControlledVad::new(block_size, &b, alpha_s, alpha_p, delta, 125);
+        let noise_est = ProbabilisticExpTimeAvg::new(block_size, alpha_d, vad);
+
+        // parameters for SNR estimation
+        let alpha = T::from(0.92).unwrap();
+        let snr_est = DecisionDirected::new(alpha);
+
+        // parameters for gain computation
+        let gain_fn = LogMmse::default();
+
         Proc {
             block_size,
             frame: 0,
@@ -172,20 +186,15 @@ where
             snr_pre_avg_beta: T::from(0.7).unwrap(),
             snr_post: Array1::from_elem(block_size, T::one()),
             noise_power: Array1::from_elem(block_size, T::zero()),
-            noise_power_alpha: T::from(0.95).unwrap(),
-            spectrum_power_avg: Array1::from_elem(block_size, T::zero()),
-            spectrum_power_alpha: T::from(0.8).unwrap(),
-            spectrum_power_min: Array1::from_elem(block_size, T::zero()),
-            spectrum_power_tmp: Array1::from_elem(block_size, T::zero()),
             gain_h1: Array1::from_elem(block_size, T::one()),
             p_gain: Array1::from_elem(block_size, T::one()),
-            p_noise: Array1::from_elem(block_size, T::one()),
-            p_noise_alpha: T::from(0.2).unwrap(),
-            p_noise_threshold: T::from(5).unwrap(),
             gain_min: T::from(0.001).unwrap(),
-            snr_alpha: T::from(0.92).unwrap(),
             snr_pre_avg_frame: T::from(1.0).unwrap(),
             snr_pre_avg_peak: T::from(1.0).unwrap(),
+
+            gain_fn,
+            snr_est,
+            noise_est,
         }
     }
 }
@@ -200,13 +209,7 @@ where
 
     fn process(&mut self, spec_in: ArrayView1<Complex<T>>, spec_out: ArrayViewMut1<Complex<T>>) {
         // update a priori and a posteriori SNR
-        DecisionDirected::new(self.snr_alpha).update(
-            spec_in,
-            self.noise_power.view(),
-            self.gain_h1.view(),
-            self.snr_pre.view_mut(),
-            self.snr_post.view_mut()
-        );
+        self.snr_est.update(spec_in, self.noise_power.view(), self.gain_h1.view(), self.snr_pre.view_mut(), self.snr_post.view_mut());
 
         {   // compute speech probability for gain (p_gain)
             // a priori SNR averaging over time
@@ -315,77 +318,10 @@ where
         }
 
         // compute gain for speech presence
-        LogMmse::default()
-            .update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
+        self.gain_fn.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
 
-        {   // noise spectrum estimation
-            // average spectrum in frequency (S_f)
-            let w = 1;
-            let b = sspse::window::hamming::<T>(w * 2 + 1).to_array();
-
-            let y_pwr = spec_in.mapv(|v| v.norm_sqr());
-            let y_padded = sspse::ft::extend_even(&y_pwr, w);
-
-            let mut sf = Array1::zeros(self.block_size);
-            for k in 0..self.block_size {
-                for i in -(w as isize)..=(w as isize) {
-                    let idx_window = (i + w as isize) as usize;
-                    let idx_spectr = (i + k as isize + w as isize) as usize;
-
-                    sf[k] += y_padded[idx_spectr] * b[idx_window];
-                }
-            }
-            let sf = sf;
-
-            // average spectrum in time (S)
-            let s = &mut self.spectrum_power_avg;
-            let alpha = self.spectrum_power_alpha;
-
-            azip!(mut s (s), sf in {
-                *s = alpha * *s + (T::one() - alpha) * sf;
-            });
-
-            // minimum tracking (S_min, S_tmp)
-            let s_min = &mut self.spectrum_power_min;
-            let s_tmp = &mut self.spectrum_power_tmp;
-            let s = &self.spectrum_power_avg;
-
-            azip!(mut s_min (s_min), mut s_tmp (s_tmp), s (s) in {
-                *s_min = s_min.min(s);
-                *s_tmp = s_tmp.min(s);
-            });
-
-            let l = 125;
-            if self.frame % l == 0 {
-                self.spectrum_power_min.assign(&self.spectrum_power_tmp);
-                self.spectrum_power_tmp.assign(&self.spectrum_power_avg);
-            }
-
-            // compute discriminator S_r
-            let sr = &self.spectrum_power_avg / &self.spectrum_power_min;
-
-            // compute p'(k, l)
-            let p = &mut self.p_noise;
-
-            let alpha = self.p_noise_alpha;
-            let threshold = self.p_noise_threshold;
-
-            azip!(mut p (p), sr (&sr) in {
-                let i = if sr > threshold { T::one() } else { T::zero() };
-                *p = alpha * *p + (T::one() - alpha) * i;
-            });
-
-            // compute noise power/variance via time-variant exponential averaging
-            let noise_pwr = &mut self.noise_power;
-            let p = &self.p_noise;
-
-            let alpha = self.noise_power_alpha;
-
-            azip!(mut noise_pwr (noise_pwr), spectrum (spec_in), p (p) in {
-                let alpha = alpha + (T::one() - alpha) * p;
-                *noise_pwr = alpha * *noise_pwr + (T::one() - alpha) * spectrum.norm_sqr();
-            });
-        }
+        // noise spectrum estimation
+        self.noise_est.update(spec_in, self.noise_power.view_mut());
 
         // apply gain
         azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
