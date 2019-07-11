@@ -1,11 +1,11 @@
 use sspse::ft;
 use sspse::proc;
 use sspse::stsa::{self, Subtraction, SetNoiseEstimate};
+use sspse::utils;
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
 use clap::{App, Arg};
-use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
 use ndarray::{s, Axis};
 use num::Complex;
@@ -62,70 +62,31 @@ fn main() -> Result<(), Error> {
         .build();
 
     // compute spectrum
-    let spectrum_orig = stft.process(&samples_c);
+    let spectrum_in = stft.process(&samples_c);
 
     // spectral substraction
     let factor = 1.0;
     let post_gain = 1.5;
 
     let mut p = Subtraction::new(segment_len, factor, post_gain);
-    p.set_noise_estimate(stsa::utils::noise_amplitude_est(&spectrum_orig.slice(s![..3, ..])).view());
+    p.set_noise_estimate(stsa::utils::noise_amplitude_est(&spectrum_in.slice(s![..3, ..])).view());
 
-    let spectrum = proc::utils::process_spectrum(&mut p, &spectrum_orig);
+    let spectrum_out = proc::utils::process_spectrum(&mut p, &spectrum_in);
 
     // compute signal from spectrum
-    let out = istft.process(&spectrum);
+    let out = istft.process(&spectrum_out);
 
     // drop imaginary part
     let out = out.mapv(|v| v.re * post_gain);
 
     // write
     if let Some(path_out) = path_out {
-        let out_spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: samples_spec.sample_rate,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
-
-        let mut writer = hound::WavWriter::create(path_out, out_spec)?;
-        for x in out.iter() {
-            writer.write_sample(*x as f32)?;
-        }
-        writer.finalize()?;
+        utils::write_wav(path_out, &out, samples_spec.sample_rate)?;
     }
 
     // plot
     if plot {
-        let fftfreq = ft::fftshift(&stft.spectrum_freqs(samples_spec.sample_rate as f64));
-        let f0 = fftfreq[0];
-        let f1 = fftfreq[fftfreq.len() - 1];
-
-        let times = stft.spectrum_times(samples.len(), samples_spec.sample_rate as f64);
-        let t0 = times[0];
-        let t1 = times[times.len() - 1];
-
-        // plot original spectrum
-        let visual = ft::spectrum_to_visual(&spectrum_orig, -1e2, 1e2);
-
-        let mut fig = Figure::new();
-        let ax = fig.axes2d();
-        ax.set_palette(gnuplot::HELIX);
-        ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
-        ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
-        ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-        fig.show();
-
-        // plot modified spectrum
-        let visual = ft::spectrum_to_visual(&spectrum, -1e2, 1e2);
-
-        let mut fig = Figure::new();
-        let ax = fig.axes2d();
-        ax.set_palette(gnuplot::HELIX);
-        ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
-        ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
-        ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-        fig.show();
+        utils::plot_spectras(&spectrum_in, &spectrum_out, &stft, samples.len(), samples_spec.sample_rate);
     }
 
     Ok(())
