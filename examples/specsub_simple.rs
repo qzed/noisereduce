@@ -62,8 +62,7 @@ fn main() -> Result<(), Error> {
         .build();
 
     // compute spectrum
-    let mut spectrum = stft.process(&samples_c);
-    let spectrum_orig = spectrum.clone();
+    let spectrum_orig = stft.process(&samples_c);
 
     // spectral substraction
     let factor = 1.0;
@@ -72,7 +71,7 @@ fn main() -> Result<(), Error> {
     let mut p = Subtraction::new(segment_len, factor, post_gain);
     p.set_noise_estimate(stsa::utils::noise_amplitude_est(&spectrum_orig.slice(s![..3, ..])).view());
 
-    proc::utils::process_spectrum(p, &spectrum_orig, &mut spectrum);
+    let spectrum = proc::utils::process_spectrum(&mut p, &spectrum_orig);
 
     // compute signal from spectrum
     let out = istft.process(&spectrum);

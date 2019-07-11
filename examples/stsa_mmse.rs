@@ -95,7 +95,6 @@ fn main() -> Result<(), Error> {
 
     // perform stft
     let spectrum = stft.process(&samples_c);
-    let mut spectrum_out = spectrum.clone();
 
     // set-up voice-activity detector
     let noise_floor = power::noise_floor_est(&spectrum.slice(s![..3, ..]));
@@ -119,7 +118,7 @@ fn main() -> Result<(), Error> {
     stsa.set_noise_estimate(stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
     // main algorithm loop over spectrum frames
-    proc::utils::process_spectrum(&mut stsa, &spectrum, &mut spectrum_out);
+    let spectrum_out = proc::utils::process_spectrum(&mut stsa, &spectrum);
 
     // perform istft
     let out = istft.process(&spectrum_out);

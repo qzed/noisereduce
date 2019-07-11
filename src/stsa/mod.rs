@@ -186,6 +186,14 @@ pub trait SetNoiseEstimate<T> {
 }
 
 
+pub trait NoiseReductionProcessor<T>: Processor<T> + SetNoiseEstimate<T> {}
+
+impl<T, P> NoiseReductionProcessor<T> for P
+where
+    P: Processor<T> + SetNoiseEstimate<T>,
+{}
+
+
 pub struct Stsa<T, G, S, N> {
     block_size: usize,
 

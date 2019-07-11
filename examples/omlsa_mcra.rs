@@ -72,13 +72,12 @@ fn main() -> Result<(), Error> {
 
     // perform stft
     let spectrum = stft.process(&samples_c);
-    let mut spectrum_out = spectrum.clone();
 
     // main algorithm loop over spectrum frames
     let mut p = setup_proc(segment_len);
     p.set_noise_estimate(sspse::stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
-    proc::utils::process_spectrum(p, &spectrum, &mut spectrum_out);
+    let spectrum_out = proc::utils::process_spectrum(&mut p, &spectrum);
 
     // perform istft
     let out = istft.process(&spectrum_out);
