@@ -3,7 +3,7 @@ use sspse::proc;
 use sspse::stsa::gain::{LogMmse, Mmse};
 use sspse::stsa::noise::ExpTimeAvg;
 use sspse::stsa::snr::DecisionDirected;
-use sspse::stsa::{self, Gain, Stsa};
+use sspse::stsa::{self, Gain, Stsa, SetNoiseEstimate};
 use sspse::vad::b::power::{self, PowerThresholdVad};
 // use sspse::vad::f::energy::{self, EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
@@ -116,7 +116,7 @@ fn main() -> Result<(), Error> {
     };
 
     let mut stsa = Stsa::new(segment_len, gain_fn, snr_est, noise_tracker);
-    stsa.set_noise_power_estimate(&stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])));
+    stsa.set_noise_estimate(stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
     // main algorithm loop over spectrum frames
     proc::utils::process(&mut stsa, &spectrum, &mut spectrum_out);

@@ -4,7 +4,7 @@ use sspse::proc::{self, Processor};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
-use sspse::stsa::{Gain, SnrEstimator, NoiseTracker};
+use sspse::stsa::{Gain, SnrEstimator, NoiseTracker, SetNoiseEstimate};
 use sspse::stsa::gain::LogMmse;
 use sspse::stsa::snr::DecisionDirected;
 use sspse::stsa::noise::ProbabilisticExpTimeAvg;
@@ -77,8 +77,8 @@ fn main() -> Result<(), Error> {
     let mut spectrum_out = spectrum.clone();
 
     // main algorithm loop over spectrum frames
-    let mut p = Proc::new(segment_len);
-    p.noise_power = sspse::stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..]));
+    let mut p = setup_proc(segment_len);
+    p.set_noise_estimate(sspse::stsa::utils::noise_power_est(&spectrum.slice(s![..3, ..])).view());
 
     proc::utils::process(p, &spectrum, &mut spectrum_out);
 
@@ -139,7 +139,47 @@ fn main() -> Result<(), Error> {
 }
 
 
-struct Proc<T> {
+fn setup_proc<T>(block_size: usize) -> impl Processor<T> + SetNoiseEstimate<T>
+where
+    T: Float + FloatConst + NumCastUnchecked + NumAssign,
+{
+    // parameters for noise spectrum estimation
+    let w = 1;
+    let b = W::hamming::<T>(w * 2 + 1);
+    let alpha_s = T::from(0.8).unwrap();
+    let alpha_p = T::from(0.2).unwrap();
+    let alpha_d = T::from(0.95).unwrap();
+    let delta = T::from(5.0).unwrap();
+    let vad = MinimaControlledVad::new(block_size, &b, alpha_s, alpha_p, delta, 125);
+    let noise_est = ProbabilisticExpTimeAvg::new(block_size, alpha_d, vad);
+
+    // parameters for SNR estimation
+    let alpha = T::from(0.92).unwrap();
+    let snr_est = DecisionDirected::new(alpha);
+
+    // parameters for speech probability estimationa
+    let beta = T::from(0.7).unwrap();
+    let w_local = 1;
+    let h_local = W::hamming::<T>(w_local * 2 + 1);
+    let w_global = 15;
+    let h_global = W::hamming::<T>(w_global * 2 + 1);
+    let snr_pre_min = T::from(1e-3).unwrap();
+    let snr_pre_max = T::from(1e3).unwrap();
+    let snr_pre_peak_min = T::from(1.0).unwrap();
+    let snr_pre_peak_max = T::from(1e5).unwrap();
+    let q_max = T::from(0.95).unwrap();
+    let p_est = SoftDecisionProbabilityEstimator::new(block_size, beta, &h_local, &h_global, snr_pre_min, snr_pre_max, snr_pre_peak_min, snr_pre_peak_max, q_max);
+
+    // parameters for gain computation
+    let gain_fn = LogMmse::default();
+    let gain_min = T::from(0.001).unwrap();
+
+    // create
+    Proc::new(block_size, noise_est, p_est, snr_est, gain_fn, gain_min)
+}
+
+
+struct Proc<T, N, P, S, G> {
     block_size: usize,
     snr_pre: Array1<T>,
     snr_post: Array1<T>,
@@ -148,47 +188,17 @@ struct Proc<T> {
     p_gain: Array1<T>,
     gain_min: T,
 
-    noise_est: ProbabilisticExpTimeAvg<T, MinimaControlledVad<T>>,
-    p_est: SoftDecisionProbabilityEstimator<T>,
-    snr_est: DecisionDirected<T>,
-    gain_fn: LogMmse<T>,
+    noise_est: N,
+    p_est: P,
+    snr_est: S,
+    gain_fn: G,
 }
 
-impl<T> Proc<T>
+impl<T, N, P, S, G> Proc<T, N, P, S, G>
 where
-    T: Float + FloatConst,
+    T: Float,
 {
-    pub fn new(block_size: usize) -> Self {
-        // parameters for noise spectrum estimation
-        let w = 1;
-        let b = W::hamming::<T>(w * 2 + 1);
-        let alpha_s = T::from(0.8).unwrap();
-        let alpha_p = T::from(0.2).unwrap();
-        let alpha_d = T::from(0.95).unwrap();
-        let delta = T::from(5.0).unwrap();
-        let vad = MinimaControlledVad::new(block_size, &b, alpha_s, alpha_p, delta, 125);
-        let noise_est = ProbabilisticExpTimeAvg::new(block_size, alpha_d, vad);
-
-        // parameters for SNR estimation
-        let alpha = T::from(0.92).unwrap();
-        let snr_est = DecisionDirected::new(alpha);
-
-        // parameters for speech probability estimationa
-        let beta = T::from(0.7).unwrap();
-        let w_local = 1;
-        let h_local = W::hamming::<T>(w_local * 2 + 1);
-        let w_global = 15;
-        let h_global = W::hamming::<T>(w_global * 2 + 1);
-        let snr_pre_min = T::from(1e-3).unwrap();
-        let snr_pre_max = T::from(1e3).unwrap();
-        let snr_pre_peak_min = T::from(1.0).unwrap();
-        let snr_pre_peak_max = T::from(1e5).unwrap();
-        let q_max = T::from(0.95).unwrap();
-        let p_est = SoftDecisionProbabilityEstimator::new(block_size, beta, &h_local, &h_global, snr_pre_min, snr_pre_max, snr_pre_peak_min, snr_pre_peak_max, q_max);
-
-        // parameters for gain computation
-        let gain_fn = LogMmse::default();
-
+    pub fn new(block_size: usize, noise_est: N, p_est: P, snr_est: S, gain_h1: G, gain_min: T) -> Self {
         Proc {
             block_size,
             snr_pre: Array1::zeros(block_size),
@@ -196,19 +206,31 @@ where
             noise_power: Array1::zeros(block_size),
             gain_h1: Array1::zeros(block_size),
             p_gain: Array1::zeros(block_size),
-            gain_min: T::from(0.001).unwrap(),
-
+            gain_min,
             noise_est,
             snr_est,
             p_est,
-            gain_fn,
+            gain_fn: gain_h1
         }
     }
 }
 
-impl<T> Processor<T> for Proc<T>
+impl<T, N, P, S, G> SetNoiseEstimate<T> for Proc<T, N, P, S, G>
 where
-    T: Float + FloatConst + NumAssign + NumCastUnchecked,
+    T: Float,
+{
+    fn set_noise_estimate(&mut self, noise: ArrayView1<T>) {
+        self.noise_power.assign(&noise);
+    }
+}
+
+impl<T, N, P, S, G> Processor<T> for Proc<T, N, P, S, G>
+where
+    T: Float,
+    N: NoiseTracker<T>,
+    S: SnrEstimator<T>,
+    P: SpeechProbabilityEstimator<T>,
+    G: Gain<T>,
 {
     fn block_size(&self) -> usize {
         self.block_size

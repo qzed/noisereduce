@@ -6,7 +6,7 @@ pub mod utils;
 
 use crate::proc::Processor;
 
-use ndarray::{azip, Array1, ArrayBase, ArrayView1, ArrayViewMut1, Data, Ix1};
+use ndarray::{azip, Array1, ArrayView1, ArrayViewMut1};
 use num::{Complex, Float};
 
 
@@ -180,6 +180,11 @@ impl<T> SnrEstimator<T> for &mut dyn SnrEstimator<T> {
 }
 
 
+pub trait SetNoiseEstimate<T> {
+    fn set_noise_estimate(&mut self, noise: ArrayView1<T>);
+}
+
+
 pub struct Stsa<T, G, S, N> {
     block_size: usize,
 
@@ -214,12 +219,14 @@ where
             gain: Array1::from_elem(block_size, T::one()),
         }
     }
+}
 
-    pub fn set_noise_power_estimate<D>(&mut self, noise_pwr: &ArrayBase<D, Ix1>)
-    where
-        D: Data<Elem = T>,
-    {
-        self.noise_pwr.assign(noise_pwr)
+impl<T, G, S, N> SetNoiseEstimate<T> for Stsa<T, G, S, N>
+where
+    T: Float,
+{
+    fn set_noise_estimate(&mut self, noise: ArrayView1<T>) {
+        self.noise_pwr.assign(&noise);
     }
 }
 
