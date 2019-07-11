@@ -1,14 +1,14 @@
 //! Minima Controlled Voice Activity Detection.
-//! 
+//!
 //! For noise estimation via Minima Controlled Recursive Averaging (MCRA) as
 //! proposed in https://doi.org/10.1016/S0165-1684(01)00128-1.
 
 use super::VoicePresenceDetector;
 use crate::window::WindowFunction;
 
-use ndarray::{s, azip, Array1, ArrayBase, Data, DataMut, Ix1};
-use num::{Complex, Float};
+use ndarray::{azip, s, Array1, ArrayBase, Data, DataMut, Ix1};
 use num::traits::NumAssign;
+use num::{Complex, Float};
 
 
 pub struct MinimaControlledVad<T> {
@@ -30,8 +30,14 @@ impl<T> MinimaControlledVad<T>
 where
     T: Float,
 {
-    pub fn new<W>(block_size: usize, window: &W, alpha_s: T, alpha_p: T, delta: T, tracking_len: usize)
-        -> Self
+    pub fn new<W>(
+        block_size: usize,
+        window: &W,
+        alpha_s: T,
+        alpha_p: T,
+        delta: T,
+        tracking_len: usize,
+    ) -> Self
     where
         W: WindowFunction<T>,
     {
@@ -71,7 +77,7 @@ where
         azip!(mut p (&mut self.spectrum_padded.slice_mut(s![w..w+self.block_size])), s (spectrum) in {
             *p = s.norm_sqr();
         });
-        self.spectrum_padded.slice_mut(s![w+self.block_size..]).fill(T::zero());
+        self.spectrum_padded.slice_mut(s![w + self.block_size..]).fill(T::zero());
 
         // average spectrum over frequency (S_f)
         for k in 0..self.block_size {

@@ -3,7 +3,6 @@ use super::{VoiceActivityDetector, VoicePresenceDetector};
 use ndarray::{azip, Array1, ArrayBase, Data, DataMut, Ix1, Ix2};
 use num::{Complex, Float};
 
-
 pub struct PowerThresholdVad<T> {
     floor: Array1<T>,
     ratio: T,
