@@ -2,8 +2,9 @@
 
 pub mod mc;
 pub mod power;
+pub mod soft;
 
-use ndarray::{Array1, ArrayBase, Data, DataMut, Ix1};
+use ndarray::{Array1, ArrayBase, ArrayView1, ArrayViewMut1, Data, DataMut, Ix1};
 use num::Complex;
 
 
@@ -38,4 +39,14 @@ pub trait VoicePresenceDetector<T> {
         self.detect_into(spectrum, &mut out);
         out
     }
+}
+
+pub trait SpeechProbabilityEstimator<T> {
+    fn update(
+        &mut self,
+        spectrum: ArrayView1<Complex<T>>,
+        snr_pre: ArrayView1<T>,
+        snr_post: ArrayView1<T>,
+        p: ArrayViewMut1<T>,
+    );
 }

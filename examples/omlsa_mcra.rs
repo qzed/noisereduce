@@ -2,13 +2,15 @@ use sspse::ft;
 use sspse::math::NumCastUnchecked;
 use sspse::proc::{self, Processor};
 use sspse::wave::WavReaderExt;
-use sspse::window::{self as W, WindowFunction};
+use sspse::window as W;
 
 use sspse::stsa::{Gain, SnrEstimator, NoiseTracker};
 use sspse::stsa::gain::LogMmse;
 use sspse::stsa::snr::DecisionDirected;
 use sspse::stsa::noise::ProbabilisticExpTimeAvg;
+use sspse::vad::b::SpeechProbabilityEstimator;
 use sspse::vad::b::mc::MinimaControlledVad;
+use sspse::vad::b::soft::SoftDecisionProbabilityEstimator;
 
 use clap::{App, Arg};
 use gnuplot::{AutoOption, AxesCommon, Figure};
@@ -139,21 +141,17 @@ fn main() -> Result<(), Error> {
 
 struct Proc<T> {
     block_size: usize,
-    frame: usize,
     snr_pre: Array1<T>,
-    snr_pre_avg: Array1<T>,
-    snr_pre_avg_beta: T,
     snr_post: Array1<T>,
     noise_power: Array1<T>,
     gain_h1: Array1<T>,
     p_gain: Array1<T>,
     gain_min: T,
-    snr_pre_avg_frame: T,
-    snr_pre_avg_peak: T,
 
-    gain_fn: LogMmse<T>,
-    snr_est: DecisionDirected<T>,
     noise_est: ProbabilisticExpTimeAvg<T, MinimaControlledVad<T>>,
+    p_est: SoftDecisionProbabilityEstimator<T>,
+    snr_est: DecisionDirected<T>,
+    gain_fn: LogMmse<T>,
 }
 
 impl<T> Proc<T>
@@ -163,7 +161,7 @@ where
     pub fn new(block_size: usize) -> Self {
         // parameters for noise spectrum estimation
         let w = 1;
-        let b = sspse::window::hamming::<T>(w * 2 + 1);
+        let b = W::hamming::<T>(w * 2 + 1);
         let alpha_s = T::from(0.8).unwrap();
         let alpha_p = T::from(0.2).unwrap();
         let alpha_d = T::from(0.95).unwrap();
@@ -175,26 +173,35 @@ where
         let alpha = T::from(0.92).unwrap();
         let snr_est = DecisionDirected::new(alpha);
 
+        // parameters for speech probability estimationa
+        let beta = T::from(0.7).unwrap();
+        let w_local = 1;
+        let h_local = W::hamming::<T>(w_local * 2 + 1);
+        let w_global = 15;
+        let h_global = W::hamming::<T>(w_global * 2 + 1);
+        let snr_pre_min = T::from(1e-3).unwrap();
+        let snr_pre_max = T::from(1e3).unwrap();
+        let snr_pre_peak_min = T::from(1.0).unwrap();
+        let snr_pre_peak_max = T::from(1e5).unwrap();
+        let q_max = T::from(0.95).unwrap();
+        let p_est = SoftDecisionProbabilityEstimator::new(block_size, beta, &h_local, &h_global, snr_pre_min, snr_pre_max, snr_pre_peak_min, snr_pre_peak_max, q_max);
+
         // parameters for gain computation
         let gain_fn = LogMmse::default();
 
         Proc {
             block_size,
-            frame: 0,
-            snr_pre: Array1::from_elem(block_size, T::one()),
-            snr_pre_avg: Array1::from_elem(block_size, T::zero()),
-            snr_pre_avg_beta: T::from(0.7).unwrap(),
-            snr_post: Array1::from_elem(block_size, T::one()),
-            noise_power: Array1::from_elem(block_size, T::zero()),
-            gain_h1: Array1::from_elem(block_size, T::one()),
-            p_gain: Array1::from_elem(block_size, T::one()),
+            snr_pre: Array1::zeros(block_size),
+            snr_post: Array1::zeros(block_size),
+            noise_power: Array1::zeros(block_size),
+            gain_h1: Array1::zeros(block_size),
+            p_gain: Array1::zeros(block_size),
             gain_min: T::from(0.001).unwrap(),
-            snr_pre_avg_frame: T::from(1.0).unwrap(),
-            snr_pre_avg_peak: T::from(1.0).unwrap(),
 
-            gain_fn,
-            snr_est,
             noise_est,
+            snr_est,
+            p_est,
+            gain_fn,
         }
     }
 }
@@ -214,111 +221,8 @@ where
         // update a priori and a posteriori SNR
         self.snr_est.update(spec_in, self.noise_power.view(), self.gain_h1.view(), self.snr_pre.view_mut(), self.snr_post.view_mut());
 
-        {   // compute speech probability for gain (p_gain)
-            // a priori SNR averaging over time
-            let snr_pre_avg = &mut self.snr_pre_avg;
-            let snr_pre = &self.snr_pre;
-            let beta = self.snr_pre_avg_beta;
-
-            azip!(mut snr_pre_avg (snr_pre_avg), snr_pre (snr_pre) in {
-                *snr_pre_avg = beta * *snr_pre_avg + (T::one() - beta) * snr_pre;
-            });
-
-            // a priori SNR averaging over frequencies
-            let w_local = 1;
-            let w_global = 15;
-
-            let h_local = sspse::window::hamming::<T>(w_local * 2 + 1).to_array();
-            let h_global = sspse::window::hamming::<T>(w_global * 2 + 1).to_array();
-
-            let snr_pre_avg_padded = sspse::ft::extend_zero(&self.snr_pre_avg, w_global);
-            let mut snr_pre_avg_local = Array1::zeros(self.block_size);
-            let mut snr_pre_avg_global = Array1::zeros(self.block_size);
-
-            for k in 0..self.block_size {
-                for i in -(w_local as isize)..=(w_local as isize) {
-                    let idx_window = (i + w_local as isize) as usize;
-                    let idx_spectr = (i + k as isize + w_global as isize) as usize;
-
-                    snr_pre_avg_local[k] += snr_pre_avg_padded[idx_spectr] * h_local[idx_window];
-                }
-
-                for i in -(w_global as isize)..=(w_global as isize) {
-                    let idx_window = (i + w_global as isize) as usize;
-                    let idx_spectr = (i + k as isize + w_global as isize) as usize;
-
-                    snr_pre_avg_global[k] += snr_pre_avg_padded[idx_spectr] * h_global[idx_window];
-                }
-            }
-
-            let norm = T::one() / T::from(self.snr_pre_avg.len()).unwrap();
-            let snr_pre_avg_frame = self.snr_pre_avg.fold(T::zero(), |a, b| a + *b * norm);
-
-            // compute probabilities
-            let snr_pre_avg_min = T::from(1e-3).unwrap();
-            let snr_pre_avg_max = T::from(1e3).unwrap();
-            let snr_pre_avg_peak_min = T::from(1.0).unwrap();
-            let snr_pre_avg_peak_max = T::from(1e5).unwrap();
-
-            let p_local = snr_pre_avg_local.mapv_into(|v| {
-                if v <= snr_pre_avg_min {
-                    T::zero()
-                } else if v >= snr_pre_avg_max {
-                    T::one()
-                } else {
-                    T::ln(v / snr_pre_avg_min) / T::ln(snr_pre_avg_max / snr_pre_avg_min)
-                }
-            });
-
-            let p_global = snr_pre_avg_global.mapv_into(|v| {
-                if v <= snr_pre_avg_min {
-                    T::zero()
-                } else if v >= snr_pre_avg_max {
-                    T::one()
-                } else {
-                    T::ln(v / snr_pre_avg_min) / T::ln(snr_pre_avg_max / snr_pre_avg_min)
-                }
-            });
-
-            let p_frame = if snr_pre_avg_frame <= snr_pre_avg_min {
-                T::zero()
-            } else if snr_pre_avg_frame > self.snr_pre_avg_frame {
-                self.snr_pre_avg_peak = snr_pre_avg_frame
-                    .max(snr_pre_avg_peak_min)
-                    .min(snr_pre_avg_peak_max);
-
-                T::one()
-            } else {
-                if snr_pre_avg_frame <= self.snr_pre_avg_peak * snr_pre_avg_min {
-                    T::zero()
-                } else if snr_pre_avg_frame >= self.snr_pre_avg_peak * snr_pre_avg_max {
-                    T::one()
-                } else {
-                    T::ln(snr_pre_avg_frame / self.snr_pre_avg_peak / snr_pre_avg_min)
-                        / T::ln(snr_pre_avg_max / snr_pre_avg_min)
-                }
-            };
-
-            self.snr_pre_avg_frame = snr_pre_avg_frame;
-
-            // speech absence probability and speech presence probability
-            let p = &mut self.p_gain;
-            let snr_pre = &self.snr_pre;
-            let snr_post = &self.snr_post;
-
-            azip!(mut p (p), snr_pre (snr_pre), snr_post (snr_post), p_local, p_global, in {
-                // compute speech absence probability estimation
-                let q = T::one() - p_local * p_global * p_frame;
-                let q = q.min(T::from(0.95).unwrap());
-
-                // compute conditional speech presence probability
-                let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
-
-                let p_ = T::one() + (q / (T::one() - q)) * (T::one() + snr_pre) * T::exp(-nu);
-                let p_ = T::one() / p_;
-                *p = p_;
-            });
-        }
+        // compute speech probability for gain (p_gain)
+        self.p_est.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.p_gain.view_mut());
 
         // compute gain for speech presence
         self.gain_fn.update(spec_in, self.snr_pre.view(), self.snr_post.view(), self.gain_h1.view_mut());
@@ -327,7 +231,5 @@ where
         azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
             *spec_out = spec_in * gain_h.powf(p) * self.gain_min.powf(T::one() - p);
         });
-
-        self.frame += 1;
     }
 }
