@@ -1,26 +1,25 @@
 use sspse::ft::{Istft, IstftBuilder, Stft, StftBuilder};
 use sspse::math::NumCastUnchecked;
 use sspse::proc;
-use sspse::stsa::{self, NoiseReductionProcessor, Gain, SnrEstimator, NoiseTracker};
-use sspse::stsa::{Subtraction, Stsa, ModStsa};
-use sspse::stsa::gain::{Mmse, LogMmse};
+use sspse::stsa::gain::{LogMmse, Mmse};
 use sspse::stsa::noise::{ExpTimeAvg, ProbabilisticExpTimeAvg};
 use sspse::stsa::snr::{DecisionDirected, MaximumLikelihood};
+use sspse::stsa::{self, Gain, NoiseReductionProcessor, NoiseTracker, SnrEstimator};
+use sspse::stsa::{ModStsa, Stsa, Subtraction};
 use sspse::utils;
-use sspse::vad::b::SpeechProbabilityEstimator as PEstimator;
-use sspse::vad::b::power::{self, PowerThresholdVad};
 use sspse::vad::b::mc::MinimaControlledVad;
+use sspse::vad::b::power::{self, PowerThresholdVad};
 use sspse::vad::b::soft::SoftDecisionProbabilityEstimator;
+use sspse::vad::b::SpeechProbabilityEstimator as PEstimator;
 use sspse::vad::f::energy::{self, EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window::{self, WindowFunction};
 
-
 use clap::{App, Arg};
-use ndarray::{s, Axis, ArrayBase, Array1, Data, Ix2};
-use num::{Complex, Float, traits::FloatConst, traits::NumAssign};
-use rustfft::FFTnum;
 use hound::WavReader;
+use ndarray::{s, Array1, ArrayBase, Axis, Data, Ix2};
+use num::{traits::FloatConst, traits::NumAssign, Complex, Float};
+use rustfft::FFTnum;
 use serde::{Deserialize, Serialize};
 
 
@@ -121,7 +120,7 @@ pub enum Algorithm {
     OmLsa {
         #[serde(flatten, default)]
         params: OmLsaParams,
-    }
+    },
 }
 
 
@@ -167,14 +166,13 @@ pub enum NoiseEstimator {
         #[serde(default = "param_defaults::mmse_noise_est_alpha")]
         alpha: f64,
     },
-
     ProbabilisticExpTimeAvg {
         #[serde(default)]
         vad: ProbabilisticVad,
 
         #[serde(default = "param_defaults::omlsa_noise_est_alpha_d")]
         alpha_d: f64,
-    }
+    },
 }
 
 impl Default for NoiseEstimator {
@@ -235,7 +233,7 @@ pub enum ProbabilisticVad {
 
         #[serde(default = "param_defaults::minima_controlled_l")]
         l: usize,
-    }
+    },
 }
 
 impl Default for ProbabilisticVad {
@@ -267,7 +265,7 @@ impl Default for SnrEstimatorParams {
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all="kebab-case", tag = "type")]
+#[serde(rename_all = "kebab-case", tag = "type")]
 pub enum GainFn {
     Mmse {
         #[serde(default = "param_defaults::mmse_nu_min")]
@@ -359,7 +357,7 @@ pub enum SpeechProbabilityEstimator {
 
         #[serde(default = "param_defaults::soft_decision_q_max")]
         q_max: f64,
-    }
+    },
 }
 
 impl Default for SpeechProbabilityEstimator {
@@ -477,9 +475,7 @@ mod param_defaults {
     }
 
     pub fn omlsa_snr_estimator() -> SnrEstimatorParams {
-        SnrEstimatorParams::DecisionDirected {
-            alpha: 0.92
-        }
+        SnrEstimatorParams::DecisionDirected { alpha: 0.92 }
     }
 
     pub fn omlsa_noise_estimator() -> NoiseEstimator {
@@ -533,7 +529,6 @@ mod param_defaults {
         0.95
     }
 }
-
 
 
 fn create_window<'a, T>(window: &Window, len: usize) -> Box<dyn WindowFunction<T> + 'a>
@@ -748,13 +743,13 @@ where
             let nu_max = T::from_unchecked(*nu_max);
 
             Box::new(Mmse::new(nu_min, nu_max))
-        },
+        }
         GainFn::LogMmse { nu_min, nu_max } => {
             let nu_min = T::from_unchecked(*nu_min);
             let nu_max = T::from_unchecked(*nu_max);
 
             Box::new(LogMmse::new(nu_min, nu_max))
-        },
+        }
     }
 }
 
@@ -767,13 +762,13 @@ where
             let alpha = T::from_unchecked(*alpha);
 
             Box::new(DecisionDirected::new(alpha))
-        },
+        }
         SnrEstimatorParams::MaximumLikelihood { alpha, beta } => {
             let alpha = T::from_unchecked(*alpha);
             let beta = T::from_unchecked(*beta);
 
             Box::new(MaximumLikelihood::new(block_size, alpha, beta))
-        },
+        }
     }
 }
 
@@ -803,7 +798,7 @@ where
                     let vad = PowerThresholdVad::new(noise_floor, decision_ratio);
 
                     Box::new(ExpTimeAvg::new(block_size, alpha, vad))
-                },
+                }
                 Vad::EnergyThreshold { decision_ratio, noise } => {
                     use sspse::vad::f::VoiceActivityDetector;
 
@@ -818,9 +813,9 @@ where
                     let vad = EnergyThresholdVad::new(noise_floor, decision_ratio).per_band();
 
                     Box::new(ExpTimeAvg::new(block_size, alpha, vad))
-                },
+                }
             }
-        },
+        }
         NoiseEstimator::ProbabilisticExpTimeAvg { vad, alpha_d } => {
             let alpha_d = T::from_unchecked(*alpha_d);
 
@@ -836,7 +831,7 @@ where
             };
 
             Box::new(ProbabilisticExpTimeAvg::new(block_size, alpha_d, vad))
-        },
+        }
     }
 }
 
@@ -846,8 +841,16 @@ where
 {
     match params {
         SpeechProbabilityEstimator::SoftDecision {
-            beta, w_local, h_local, w_global, h_global, zeta_min, zeta_max,
-            zeta_peak_min, zeta_peak_max, q_max
+            beta,
+            w_local,
+            h_local,
+            w_global,
+            h_global,
+            zeta_min,
+            zeta_max,
+            zeta_peak_min,
+            zeta_peak_max,
+            q_max,
         } => {
             let beta = T::from_unchecked(*beta);
             let zeta_min = T::from_unchecked(*zeta_min);
@@ -881,28 +884,23 @@ where
     D: Data<Elem = Complex<T>>,
 {
     match params.noise {
-        NoiseInit::Zero => {
-            Array1::zeros(spectrum.dim().1)
-        },
+        NoiseInit::Zero => Array1::zeros(spectrum.dim().1),
         NoiseInit::Frames { range } => {
             let frames = spectrum.slice(s![range.0..range.1, ..]);
 
             match params.algorithm {
-                Algorithm::SpectralSubtraction { .. } => {
-                    stsa::utils::noise_amplitude_est(&frames)
-                },
+                Algorithm::SpectralSubtraction { .. } => stsa::utils::noise_amplitude_est(&frames),
                 Algorithm::OmLsa { .. } | Algorithm::Mmse { .. } => {
                     stsa::utils::noise_power_est(&frames)
-                },
+                }
             }
         }
     }
-
 }
 
 
 fn app() -> App<'static, 'static> {
-    App::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
+    App::new("Noise reduction toolkit")
         .author(clap::crate_authors!())
         .version(clap::crate_version!())
         .arg(Arg::with_name("input")
@@ -937,7 +935,7 @@ fn main() {
     let params: Parameters = serde_yaml::from_reader(params).unwrap();
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path_in).unwrap().collect_convert_dyn::<f64>().unwrap();
+    let (samples, samples_spec) = WavReader::open(path_in).unwrap() .collect_convert_dyn::<f64>().unwrap();
     let samples = samples.index_axis_move(Axis(1), 0);
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
