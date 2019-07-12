@@ -1,0 +1,16 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hamming
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: spectral-subtraction
+    factor: 1.0
+    post_gain: 1.5
+
+noise:
+    type: frames
+    range: [0, 3]
