@@ -18,7 +18,7 @@ where
 
     let out_spec = WavSpec {
         channels: 1,
-        sample_rate: sample_rate,
+        sample_rate,
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
@@ -31,6 +31,7 @@ where
     writer.finalize()
 }
 
+#[allow(clippy::cast_lossless)]
 pub fn plot_spectras<T, D1, D2>(spectrum_in: &ArrayBase<D1, Ix2>, spectrum_out: &ArrayBase<D2, Ix2>,
                             stft: &Stft<T>, num_samples: usize, sample_rate: u32)
 where
