@@ -8,6 +8,10 @@ edition = "2018"
 name="sspse"
 path="src/lib.rs"
 
+[[bin]]
+name="noisereduce"
+path="bin/noisereduce.rs"
+
 [dependencies]
 hound = "3.4.0"
 rustfft = "3.0.0"
@@ -18,3 +22,5 @@ ndarray = "0.12.1"
 sample = { git = "https://github.com/RustAudio/sample" }
 GSL = "1.1.0"
 clap = "2.33.0"
+serde = { version = "1.0.94", features = ["derive"] }
+serde_yaml = "0.8.9"

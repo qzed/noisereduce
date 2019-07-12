@@ -1,0 +1,30 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hamming
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: mmse
+
+    gain:
+        type: log-mmse
+
+    noise_estimator:
+        type: exponential-time-average
+        alpha: 0.8
+        vad:
+            type: power-threshold
+            noise:
+                type: frames
+                range: [0, 3]
+
+    snr_estimator:
+        type: decision-directed
+        alpha: 0.98
+
+noise:
+    type: frames
+    range: [0, 3]

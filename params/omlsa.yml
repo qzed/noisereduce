@@ -1,0 +1,48 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hamming
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: om-lsa
+
+    gain:
+        type: log-mmse
+    
+    gain_min: 0.001
+
+    snr_estimator:
+        type: decision-directed
+        alpha: 0.92
+    
+    noise_estimator:
+        type: probabilistic-exp-time-avg
+        alpha_d: 0.95
+        vad:
+            type: minima-controlled
+            b: { type: hamming }
+            w: 1
+            alpha_s: 0.8
+            alpha_p: 0.2
+            delta: 5.0
+            l: 125
+    
+    p_estimator:
+        type: soft-decision
+        beta: 0.7
+        w_local: 1
+        h_local: { type: hamming }
+        w_global: 15
+        h_global: { type: hamming }
+        zeta_min: 1.0e-3
+        zeta_max: 1.0e+3
+        zeta_peak_min: 1.0
+        zeta_peak_max: 1.0e+5
+        q_max: 0.95
+
+noise:
+    type: frames
+    range: [0, 3]
