@@ -15,12 +15,15 @@ use sspse::vad::f::energy::{self, EnergyThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window::{self, WindowFunction};
 
+use std::path::PathBuf;
+
 use clap::{App, Arg};
 use hound::WavReader;
 use ndarray::{s, Array1, ArrayBase, Axis, Data, Ix2};
 use num::{traits::FloatConst, traits::NumAssign, Complex, Float};
 use rustfft::FFTnum;
 use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -899,6 +902,36 @@ where
 }
 
 
+#[derive(Debug, Snafu)]
+enum Error {
+    #[snafu(display("Unable to read wave file at '{}':\n\t{}", path.display(), source))]
+    WaveInputError { source: hound::Error, path: PathBuf },
+
+    #[snafu(display("Unable to write wave file to '{}':\n\t{}", path.display(), source))]
+    WaveOutputError { source: hound::Error, path: PathBuf },
+
+    #[snafu(display("Unable to load parameter file '{}':\n\t{}", path.display(), source))]
+    ParameterIoError { source: std::io::Error, path: PathBuf },
+
+    #[snafu(display("Unable to load parameter file '{}':\n\t{}", path.display(), source))]
+    ParameterFormatError { source: serde_yaml::Error, path: PathBuf },
+}
+
+struct CliError(Error);
+
+impl From<Error> for CliError {
+    fn from(error: Error) -> CliError {
+        CliError(error)
+    }
+}
+
+impl std::fmt::Debug for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+
 fn app() -> App<'static, 'static> {
     App::new("Noise reduction toolkit")
         .author(clap::crate_authors!())
@@ -923,7 +956,7 @@ fn app() -> App<'static, 'static> {
                 .long("show"))
 }
 
-fn main() {
+fn main() -> Result<(), CliError> {
     let matches = app().get_matches();
     let path_in     = matches.value_of_os("input").unwrap();
     let path_out    = matches.value_of_os("output");
@@ -931,11 +964,18 @@ fn main() {
     let show        = matches.is_present("show");
 
     // load parameters
-    let params = std::fs::File::open(path_params).unwrap();
-    let params: Parameters = serde_yaml::from_reader(params).unwrap();
+    let params = std::fs::File::open(path_params)
+        .context(ParameterIoError { path: PathBuf::from(path_params) })?;
+
+    let params: Parameters = serde_yaml::from_reader(params)
+        .context(ParameterFormatError { path: PathBuf::from(path_params) })?;
 
     // load first channel of wave file
-    let (samples, samples_spec) = WavReader::open(path_in).unwrap() .collect_convert_dyn::<f64>().unwrap();
+    let (samples, samples_spec) = WavReader::open(path_in)
+        .context(WaveInputError { path: PathBuf::from(path_in) })?
+        .collect_convert_dyn::<f64>()
+        .context(WaveInputError { path: PathBuf::from(path_in) })?;
+
     let samples = samples.index_axis_move(Axis(1), 0);
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
@@ -962,13 +1002,16 @@ fn main() {
 
     // write
     if let Some(path_out) = path_out {
-        utils::write_wav(path_out, &out, samples_spec.sample_rate).unwrap();
+        utils::write_wav(path_out, &out, samples_spec.sample_rate)
+            .context(WaveOutputError { path: PathBuf::from(path_out) })?;
     }
 
     // plot
     if show {
         utils::plot_spectras(&spectrum_in, &spectrum_out, &stft, samples.len(), samples_spec.sample_rate);
     }
+
+    Ok(())
 }
 
 // TODO: csv/json data-dump?

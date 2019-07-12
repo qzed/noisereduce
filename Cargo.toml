@@ -24,3 +24,4 @@ GSL = "1.1.0"
 clap = "2.33.0"
 serde = { version = "1.0.94", features = ["derive"] }
 serde_yaml = "0.8.9"
+snafu = "0.4.1"
