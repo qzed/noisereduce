@@ -5,6 +5,28 @@ use ndarray::{azip, Array1, ArrayView1, ArrayViewMut1};
 use num::{Complex, Float};
 
 
+pub struct NoUpdate<T> {
+    _p: std::marker::PhantomData<*const T>,
+}
+
+impl<T> NoUpdate<T> {
+    pub fn new() -> Self {
+        NoUpdate {
+            _p: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> NoiseTracker<T> for NoUpdate<T>
+where
+    T: Float,
+{
+    fn update(&mut self, _spectrum: ArrayView1<Complex<T>>, _noise_est: ArrayViewMut1<T>) {
+        // do nothing
+    }
+}
+
+
 pub struct ExpTimeAvg<T, V> {
     voiced: Array1<bool>,
     alpha: T,

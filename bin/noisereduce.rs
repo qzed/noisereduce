@@ -2,7 +2,7 @@ use sspse::ft::{Istft, IstftBuilder, Stft, StftBuilder};
 use sspse::math::NumCastUnchecked;
 use sspse::proc;
 use sspse::stsa::gain::{LogMmse, Mmse};
-use sspse::stsa::noise::{ExpTimeAvg, ProbabilisticExpTimeAvg};
+use sspse::stsa::noise::{self, ExpTimeAvg, ProbabilisticExpTimeAvg};
 use sspse::stsa::snr::{DecisionDirected, MaximumLikelihood};
 use sspse::stsa::{self, Gain, NoiseReductionProcessor, NoiseTracker, SnrEstimator};
 use sspse::stsa::{ModStsa, Stsa, Subtraction};
@@ -129,18 +129,26 @@ pub enum Algorithm {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SpectralSubtractionParams {
+    #[serde(default = "param_defaults::spectral_subtraction_power")]
+    power: f64,
+
     #[serde(default = "param_defaults::spectral_subtraction_factor")]
     factor: f64,
 
     #[serde(default = "param_defaults::spectral_subtraction_post_gain")]
     post_gain: f64,
+
+    #[serde(default = "param_defaults::spectral_subtraction_noise_estimator")]
+    noise_estimator: NoiseEstimator,
 }
 
 impl Default for SpectralSubtractionParams {
     fn default() -> Self {
         SpectralSubtractionParams {
-            factor: 1.0,
-            post_gain: 1.0,
+            power: param_defaults::spectral_subtraction_power(),
+            factor: param_defaults::spectral_subtraction_factor(),
+            post_gain: param_defaults::spectral_subtraction_post_gain(),
+            noise_estimator: param_defaults::spectral_subtraction_noise_estimator(),
         }
     }
 }
@@ -162,6 +170,7 @@ pub struct MmseParams {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum NoiseEstimator {
+    None,
     ExpTimeAvg {
         #[serde(default)]
         vad: Vad,
@@ -410,12 +419,20 @@ mod param_defaults {
         0.020       // 20 ms
     }
 
+    pub fn spectral_subtraction_power() -> f64 {
+        1.0
+    }
+
     pub fn spectral_subtraction_factor() -> f64 {
         1.0
     }
 
     pub fn spectral_subtraction_post_gain() -> f64 {
         1.0
+    }
+
+    pub fn spectral_subtraction_noise_estimator() -> NoiseEstimator {
+        NoiseEstimator::None
     }
 
     pub fn mmse_nu_min() -> f64 {
@@ -682,13 +699,15 @@ where
 fn build_spectral_subtraction<T, D>(params: &SpectralSubtractionParams, spectrum: &ArrayBase<D, Ix2>)
     -> Box<dyn NoiseReductionProcessor<T>>
 where
-    T: Float + NumCastUnchecked + 'static,
+    T: Float + FloatConst + NumAssign + NumCastUnchecked + 'static,
     D: Data<Elem = Complex<T>>,
 {
+    let power = T::from_unchecked(params.power);
     let factor = T::from_unchecked(params.factor);
     let post_gain = T::from_unchecked(params.post_gain);
+    let noise_est = build_noise_estimator(&params.noise_estimator, spectrum);
 
-    Box::new(Subtraction::new(spectrum.dim().1, factor, post_gain))
+    Box::new(Subtraction::new(spectrum.dim().1, power, factor, post_gain, noise_est))
 }
 
 fn build_mmse<T, D>(params: &MmseParams, spectrum: &ArrayBase<D, Ix2>)
@@ -785,6 +804,9 @@ where
     let block_size = spectrum.dim().1;
 
     match params {
+        NoiseEstimator::None => {
+            Box::new(noise::NoUpdate::new())
+        }
         NoiseEstimator::ExpTimeAvg { vad, alpha } => {
             let alpha = T::from_unchecked(*alpha);
 
@@ -881,22 +903,16 @@ where
 }
 
 #[allow(clippy::deref_addrof)]
-fn compute_noise_estimate<T, D>(params: &Parameters, spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
+fn compute_noise_estimate<T, D>(params: &NoiseInit, spectrum: &ArrayBase<D, Ix2>) -> Array1<T>
 where
     T: Float + std::ops::AddAssign + ndarray::ScalarOperand,
     D: Data<Elem = Complex<T>>,
 {
-    match params.noise {
+    match params {
         NoiseInit::Zero => Array1::zeros(spectrum.dim().1),
         NoiseInit::Frames { range } => {
             let frames = spectrum.slice(s![range.0..range.1, ..]);
-
-            match params.algorithm {
-                Algorithm::SpectralSubtraction { .. } => stsa::utils::noise_amplitude_est(&frames),
-                Algorithm::OmLsa { .. } | Algorithm::Mmse { .. } => {
-                    stsa::utils::noise_power_est(&frames)
-                }
-            }
+            stsa::utils::noise_power_est(&frames)
         }
     }
 }
@@ -990,7 +1006,7 @@ fn main() -> Result<(), CliError> {
     let mut processor = build_processor(&params.algorithm, &spectrum_in);
 
     // compute and set initial noise estimate
-    let noise_est = compute_noise_estimate(&params, &spectrum_in);
+    let noise_est = compute_noise_estimate(&params.noise, &spectrum_in);
     processor.set_noise_estimate(noise_est.view());
 
     // run algorithm

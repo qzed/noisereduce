@@ -380,50 +380,61 @@ where
 }
 
 
-pub struct Subtraction<T> {
+pub struct Subtraction<T, N> {
     block_size: usize,
+    power: T,
     factor: T,
     post_gain: T,
-    noise_est: Array1<T>,
+    noise_est: N,
+    noise_power: Array1<T>,
 }
 
-impl<T> Subtraction<T>
+impl<T, N> Subtraction<T, N>
 where
     T: Float,
 {
-    pub fn new(block_size: usize, factor: T, post_gain: T) -> Self {
+    pub fn new(block_size: usize, power: T, factor: T, post_gain: T, noise_est: N) -> Self {
         Subtraction {
             block_size,
+            power,
             factor,
             post_gain,
-            noise_est: Array1::zeros(block_size),
+            noise_est,
+            noise_power: Array1::zeros(block_size),
         }
     }
 }
 
-impl<T> SetNoiseEstimate<T> for Subtraction<T>
+impl<T, N> SetNoiseEstimate<T> for Subtraction<T, N>
 where
     T: Float,
 {
     fn set_noise_estimate(&mut self, noise: ArrayView1<T>) {
-        self.noise_est.assign(&noise);
+        self.noise_power.assign(&noise);
     }
 }
 
-impl<T> Processor<T> for Subtraction<T>
+impl<T, N> Processor<T> for Subtraction<T, N>
 where
     T: Float,
+    N: NoiseTracker<T>,
 {
     fn block_size(&self) -> usize {
         self.block_size
     }
 
     fn process(&mut self, spec_in: ArrayView1<Complex<T>>, mut spec_out: ArrayViewMut1<Complex<T>>) {
-        azip!(mut spec_out, spec_in, noise_est (&self.noise_est) in {
-            let r = spec_in.norm() - self.factor * noise_est;
+        self.noise_est.update(spec_in, self.noise_power.view_mut());
+
+        let p = self.power;
+        let two = T::from(2.0).unwrap();
+        azip!(mut spec_out, spec_in, noise (&self.noise_power) in {
+            let r = spec_in.norm().powf(p) - self.factor * noise.powf(p / two);
+            let r = T::zero().max(r).powf(T::one() / p);
+
             let t = spec_in.arg();
 
-            *spec_out = Complex::from_polar(&T::zero().max(r), &t) * self.post_gain;
+            *spec_out = Complex::from_polar(&r, &t) * self.post_gain;
         });
     }
 }

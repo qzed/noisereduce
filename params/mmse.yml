@@ -10,10 +10,10 @@ algorithm:
     type: mmse
 
     gain:
-        type: log-mmse
+        type: mmse
 
     noise_estimator:
-        type: exponential-time-average
+        type: exp-time-avg
         alpha: 0.8
         vad:
             type: power-threshold
