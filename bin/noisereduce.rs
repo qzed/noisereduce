@@ -919,6 +919,7 @@ where
 
 
 #[derive(Debug, Snafu)]
+#[allow(clippy::enum_variant_names)]
 enum Error {
     #[snafu(display("Unable to read wave file at '{}':\n\t{}", path.display(), source))]
     WaveInputError { source: hound::Error, path: PathBuf },
