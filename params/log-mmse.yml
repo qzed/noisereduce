@@ -10,7 +10,7 @@ algorithm:
     type: mmse
 
     gain:
-        type: mmse
+        type: log-mmse
 
     noise_estimator:
         type: exp-time-avg
