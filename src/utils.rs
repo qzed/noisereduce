@@ -15,17 +15,18 @@ where
     D: Data<Elem = T>,
 {
     use hound::{WavSpec, WavWriter};
+    use sample::Sample;
 
     let out_spec = WavSpec {
         channels: 1,
         sample_rate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Float,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
     };
 
     let mut writer = WavWriter::create(path, out_spec)?;
     for x in data.iter() {
-        writer.write_sample(x.to_f32_unchecked())?;
+        writer.write_sample(x.to_f32_unchecked().to_sample::<i16>())?;
     }
 
     writer.finalize()
