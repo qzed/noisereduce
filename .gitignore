@@ -2,6 +2,7 @@
 /data
 **/*.rs.bk
 *.wav
+*.png
 
 
 #Added by cargo
