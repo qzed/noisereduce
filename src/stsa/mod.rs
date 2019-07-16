@@ -374,7 +374,7 @@ where
 
         // apply gain
         azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
-            *spec_out = spec_in * gain_h.powf(p) * self.gain_min.powf(T::one() - p);
+            *spec_out = spec_in * (gain_h.powf(p) * self.gain_min.powf(T::one() - p)).min(T::one());
         });
     }
 }
