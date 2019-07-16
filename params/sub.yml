@@ -2,7 +2,7 @@ stft:
     block_length: 0.02
     overlap: 0.5
     window:
-        type: hamming
+        type: hann
         periodic: true
         sqrt: true
 
