@@ -65,11 +65,13 @@ fn main() -> Result<(), Error> {
     let spectrum_in = stft.process(&samples_c);
 
     // spectral substraction
+    let power = 1.0;
     let factor = 1.0;
+    let noise_floor = 0.0;
     let post_gain = 1.5;
 
     let noise_est = stsa::noise::NoUpdate::new();
-    let mut p = Subtraction::new(segment_len, 1.0, factor, post_gain, noise_est);
+    let mut p = Subtraction::new(segment_len, power, factor, noise_floor, post_gain, noise_est);
     p.set_noise_estimate(stsa::utils::noise_power_est(&spectrum_in.slice(s![..3, ..])).view());
 
     let spectrum_out = proc::utils::process_spectrum(&mut p, &spectrum_in);

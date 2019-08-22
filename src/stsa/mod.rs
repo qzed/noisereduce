@@ -384,6 +384,7 @@ pub struct Subtraction<T, N> {
     block_size: usize,
     power: T,
     factor: T,
+    noise_floor: T,
     post_gain: T,
     noise_est: N,
     noise_power: Array1<T>,
@@ -393,11 +394,12 @@ impl<T, N> Subtraction<T, N>
 where
     T: Float,
 {
-    pub fn new(block_size: usize, power: T, factor: T, post_gain: T, noise_est: N) -> Self {
+    pub fn new(block_size: usize, power: T, factor: T, noise_floor: T, post_gain: T, noise_est: N) -> Self {
         Subtraction {
             block_size,
             power,
             factor,
+            noise_floor,
             post_gain,
             noise_est,
             noise_power: Array1::zeros(block_size),
@@ -429,8 +431,11 @@ where
         let p = self.power;
         let two = T::from(2.0).unwrap();
         azip!(mut spec_out, spec_in, noise (&self.noise_power) in {
-            let r = spec_in.norm().powf(p) - self.factor * noise.powf(p / two);
-            let r = T::zero().max(r).powf(T::one() / p);
+            let n = noise.powf(p / two);
+
+            let r = spec_in.norm().powf(p) - self.factor * n;
+            let r = T::max(n * self.noise_floor, r);
+            let r = r.powf(T::one() / p);
 
             let t = spec_in.arg();
 

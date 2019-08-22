@@ -135,6 +135,9 @@ pub struct SpectralSubtractionParams {
     #[serde(default = "param_defaults::spectral_subtraction_factor")]
     factor: f64,
 
+    #[serde(default = "param_defaults::spectral_subtraction_noise_floor")]
+    noise_floor: f64,
+
     #[serde(default = "param_defaults::spectral_subtraction_post_gain")]
     post_gain: f64,
 
@@ -147,6 +150,7 @@ impl Default for SpectralSubtractionParams {
         SpectralSubtractionParams {
             power: param_defaults::spectral_subtraction_power(),
             factor: param_defaults::spectral_subtraction_factor(),
+            noise_floor: param_defaults::spectral_subtraction_noise_floor(),
             post_gain: param_defaults::spectral_subtraction_post_gain(),
             noise_estimator: param_defaults::spectral_subtraction_noise_estimator(),
         }
@@ -427,6 +431,10 @@ mod param_defaults {
         1.0
     }
 
+    pub fn spectral_subtraction_noise_floor() -> f64 {
+        0.0
+    }
+
     pub fn spectral_subtraction_post_gain() -> f64 {
         1.0
     }
@@ -704,10 +712,11 @@ where
 {
     let power = T::from_unchecked(params.power);
     let factor = T::from_unchecked(params.factor);
+    let noise_floor = T::from_unchecked(params.noise_floor);
     let post_gain = T::from_unchecked(params.post_gain);
     let noise_est = build_noise_estimator(&params.noise_estimator, spectrum);
 
-    Box::new(Subtraction::new(spectrum.dim().1, power, factor, post_gain, noise_est))
+    Box::new(Subtraction::new(spectrum.dim().1, power, factor, noise_floor, post_gain, noise_est))
 }
 
 fn build_mmse<T, D>(params: &MmseParams, spectrum: &ArrayBase<D, Ix2>)
