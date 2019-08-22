@@ -10,6 +10,7 @@ algorithm:
     type: spectral-subtraction
     power: 1.0
     factor: 1.0
+    noise_floor: 0.0
     post_gain: 1.0
     noise:
         type: none
