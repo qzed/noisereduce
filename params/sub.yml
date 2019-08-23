@@ -12,7 +12,7 @@ algorithm:
     factor: 1.0
     noise_floor: 0.0
     post_gain: 1.0
-    noise:
+    noise_estimator:
         type: none
 
 noise:
