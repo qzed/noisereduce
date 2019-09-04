@@ -27,7 +27,7 @@ pub struct SoftDecisionProbabilityEstimator<T> {
 
 impl<T> SoftDecisionProbabilityEstimator<T>
 where
-    T: Float,
+    T: Float + ndarray::ScalarOperand,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<W1, W2>(
@@ -49,8 +49,14 @@ where
         assert!(h_global.len() % 2 == 1, "global window function must have odd size");
         assert!(h_global.len() >= h_local.len(), "global window must be larger than local window");
 
+        // normalize windows
         let h_local = h_local.to_array();
+        let s_local = h_local.sum();
+        let h_local = h_local / s_local;
+
         let h_global = h_global.to_array();
+        let s_global = h_global.sum();
+        let h_global = h_global / s_global;
 
         SoftDecisionProbabilityEstimator {
             block_size,

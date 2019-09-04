@@ -98,7 +98,7 @@ fn main() -> Result<(), Error> {
 
 fn setup_proc<T>(block_size: usize) -> impl Processor<T> + SetNoiseEstimate<T>
 where
-    T: Float + FloatConst + NumCastUnchecked + NumAssign,
+    T: Float + FloatConst + NumCastUnchecked + NumAssign + ndarray::ScalarOperand,
 {
     // parameters for noise spectrum estimation
     let w = 1;

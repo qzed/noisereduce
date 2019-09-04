@@ -737,7 +737,7 @@ where
 fn build_omlsa<T, D>(params: &OmLsaParams, spectrum: &ArrayBase<D, Ix2>)
     -> Box<dyn NoiseReductionProcessor<T>>
 where
-    T: Float + FloatConst + NumCastUnchecked + NumAssign + 'static,
+    T: Float + FloatConst + NumCastUnchecked + NumAssign + ndarray::ScalarOperand + 'static,
     D: Data<Elem = Complex<T>>,
 {
     let block_size = spectrum.dim().1;
@@ -754,7 +754,7 @@ where
 fn build_processor<T, D>(params: &Algorithm, spectrum: &ArrayBase<D, Ix2>)
     -> Box<dyn NoiseReductionProcessor<T>>
 where
-    T: Float + FloatConst + NumAssign + NumCastUnchecked + 'static,
+    T: Float + FloatConst + NumAssign + NumCastUnchecked + ndarray::ScalarOperand + 'static,
     D: Data<Elem = Complex<T>>,
 {
     match params {
@@ -871,7 +871,7 @@ where
 
 fn build_p_estimator<T>(params: &SpeechProbabilityEstimator, block_size: usize) -> impl PEstimator<T>
 where
-    T: Float + FloatConst + NumAssign + NumCastUnchecked + 'static,
+    T: Float + FloatConst + NumAssign + NumCastUnchecked + ndarray::ScalarOperand + 'static,
 {
     match params {
         SpeechProbabilityEstimator::SoftDecision {
@@ -995,6 +995,8 @@ fn main() -> Result<(), CliError> {
 
     let params: Parameters = serde_yaml::from_reader(params)
         .context(ParameterFormatError { path: PathBuf::from(path_params) })?;
+
+    println!("{:#?}", params);
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)
