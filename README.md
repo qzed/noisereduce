@@ -9,6 +9,7 @@ Algorithms can be specified via parameter-files (see `params/` for examples). Th
 cargo run --release --bin noisereduce -- -p <parameter-file.yml> <input.wav> <output.wav>
 ```
 
-Feel free to have a look at the corresponding [paper][paper].
+Feel free to have a look at the corresponding [slides][slides] and [paper][paper].
 
 [paper]: https://nbviewer.jupyter.org/github/qzed/noisereduce/blob/master/paper/Real-Time%20capable%20Noise%20Reduction%20Methods.pdf
+[slides]: https://nbviewer.jupyter.org/github/qzed/noisereduce/blob/master/paper/Slides.pdf
