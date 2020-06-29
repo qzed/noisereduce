@@ -4,7 +4,8 @@ use hound::{Error, Sample as InputSample, SampleFormat, WavReader, WavSamples, W
 use ndarray::Array2;
 use num::traits::Zero;
 
-use sample::{FromSample, Sample, I24};
+use dasp::Sample;
+use dasp::sample::{FromSample, I24};
 
 
 pub trait WavReaderExt<R> {

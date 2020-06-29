@@ -15,7 +15,7 @@ where
     D: Data<Elem = T>,
 {
     use hound::{WavSpec, WavWriter};
-    use sample::Sample;
+    use dasp::Sample;
 
     let out_spec = WavSpec {
         channels: 1,
@@ -60,7 +60,7 @@ where
     ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
     ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
     ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-    fig.show();
+    fig.show().unwrap();
 
     // plot modified spectrum
     let visual = ft::spectrum_to_visual(&spectrum_out, T::from_unchecked(-1e2), T::from_unchecked(1e2));
@@ -71,5 +71,5 @@ where
     ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
     ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
     ax.image(visual.t().iter(), visual.shape()[1], visual.shape()[0], Some((t0, f0, t1, f1)), &[]);
-    fig.show();
+    fig.show().unwrap();
 }

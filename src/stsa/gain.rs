@@ -40,12 +40,12 @@ where
         let half = T::from(0.5).unwrap();
         let fspi2 = T::PI().sqrt() * half;
 
-        azip!(mut gain (gain), spectrum (spectrum), snr_pre (snr_pre), snr_post (snr_post) in {
-            let nu = snr_pre / (T::one() + snr_pre) * snr_post;
+        azip!((gain in gain, spectrum in spectrum, snr_pre in snr_pre, snr_post in snr_post) {
+            let nu = *snr_pre / (T::one() + *snr_pre) * *snr_post;
             let nu = nu.max(self.nu_min).min(self.nu_max);          // prevent over/underflows
 
             *gain = fspi2
-                * (T::sqrt(nu) * T::exp(-nu * half) / snr_post)
+                * (T::sqrt(nu) * T::exp(-nu * half) / *snr_post)
                 * ((T::one() + nu) * bessel::I0(nu * half) + nu * bessel::I1(nu * half))
                 * spectrum.norm();
         });
@@ -86,11 +86,11 @@ where
     ) {
         let half = T::from(0.5).unwrap();
 
-        azip!(mut gain (gain), snr_pre (snr_pre), snr_post (snr_post) in {
-            let nu = snr_pre / (T::one() + snr_pre) * snr_post;
+        azip!((gain in gain, snr_pre in snr_pre, snr_post in snr_post) {
+            let nu = *snr_pre / (T::one() + *snr_pre) * *snr_post;
             let nu = nu.max(self.nu_min).min(self.nu_max);          // prevent over/underflows
 
-            *gain = (snr_pre / (T::one() + snr_pre)) * T::exp(-half * expint::Ei(-nu));
+            *gain = (*snr_pre / (T::one() + *snr_pre)) * T::exp(-half * expint::Ei(-nu));
         });
     }
 }

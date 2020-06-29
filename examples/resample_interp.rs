@@ -2,7 +2,7 @@ use sspse::wave::WavReaderExt;
 
 use clap::{value_t_or_exit, App, Arg};
 use hound::{Error, SampleFormat, WavReader, WavSpec, WavWriter};
-use sample::Signal;
+use dasp::signal::Signal;
 
 
 fn app() -> App<'static, 'static> {
@@ -42,11 +42,11 @@ fn main() -> Result<(), Error> {
         .map(|s| s.unwrap());                   // unwrap Result
 
     // create interpolator for sample-rate conversion
-    let buffer = sample::ring_buffer::Fixed::from([[0.0]; 64]);
-    let interp = sample::interpolate::Sinc::new(buffer);
+    let buffer = dasp::ring_buffer::Fixed::from([[0.0]; 64]);
+    let interp = dasp::interpolate::sinc::Sinc::new(buffer);
 
     // convert sample rate
-    let signal = sample::signal::from_interleaved_samples_iter(samples);
+    let signal = dasp::signal::from_interleaved_samples_iter(samples);
     let signal = signal.from_hz_to_hz(interp, spec.sample_rate as f64, target_sample_rate as f64);
 
     // write result

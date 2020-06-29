@@ -91,8 +91,8 @@ where
     ) {
         // average a priori SNR over time
         let beta = self.beta;
-        azip!(mut snr_pre_avg (&mut self.snr_pre_avg), snr_pre (snr_pre) in {
-            *snr_pre_avg = beta * *snr_pre_avg + (T::one() - beta) * snr_pre;
+        azip!((snr_pre_avg in &mut self.snr_pre_avg, snr_pre in snr_pre) {
+            *snr_pre_avg = beta * *snr_pre_avg + (T::one() - beta) * *snr_pre;
         });
 
         // average a priori SNR over frequencies and compute probabilities
@@ -164,21 +164,21 @@ where
         self.snr_pre_avg_frame = snr_pre_avg_frame;
 
         // speech absence probability and speech presence probability
-        azip!(
-            mut p (p),
-            snr_pre (snr_pre),
-            snr_post (snr_post),
-            p_local (&self.p_local),
-            p_global (&self.p_global),
-        in {
+        azip!((
+            p in p,
+            snr_pre in snr_pre,
+            snr_post in snr_post,
+            p_local in &self.p_local,
+            p_global in &self.p_global,
+        ) {
             // compute speech absence probability estimation
-            let q = T::one() - p_local * p_global * p_frame;
+            let q = T::one() - *p_local * *p_global * p_frame;
             let q = q.min(self.q_max);
 
             // compute conditional speech presence probability
-            let nu = (snr_pre / (T::one() + snr_pre)) * snr_post;
+            let nu = (*snr_pre / (T::one() + *snr_pre)) * *snr_post;
 
-            let p_ = T::one() + (q / (T::one() - q)) * (T::one() + snr_pre) * T::exp(-nu);
+            let p_ = T::one() + (q / (T::one() - q)) * (T::one() + *snr_pre) * T::exp(-nu);
             let p_ = T::one() / p_;
             *p = p_;
         });

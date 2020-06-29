@@ -53,7 +53,7 @@ where
 {
     fn update(&mut self, spectrum: ArrayView1<Complex<T>>, noise_est: ArrayViewMut1<T>) {
         self.vad.detect_into(&spectrum, &mut self.voiced);
-        azip!(mut noise (noise_est), voiced (&self.voiced), spectrum (spectrum) in {
+        azip!((noise in noise_est, voiced in &self.voiced, spectrum in spectrum) {
             if !voiced {
                 *noise = self.alpha * *noise + (T::one() - self.alpha) * spectrum.norm_sqr();
             }
@@ -91,8 +91,8 @@ where
         self.vad.detect_into(&spectrum, &mut self.p_voice);
 
         let alpha_d = self.alpha;
-        azip!(mut noise (noise_est), p (&self.p_voice), spectrum (spectrum) in {
-            let alpha = alpha_d + (T::one() - alpha_d) * p;
+        azip!((noise in noise_est, p in &self.p_voice, spectrum in spectrum) {
+            let alpha = alpha_d + (T::one() - alpha_d) * *p;
             *noise = alpha * *noise + (T::one() - alpha) * spectrum.norm_sqr();
         });
     }

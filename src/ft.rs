@@ -290,7 +290,7 @@ where
 pub fn check_cola<W, F>(window: &W, overlap: usize, method: InversionMethod, eps: F) -> bool
 where
     W: WindowFunction<F>,
-    F: Float + std::ops::AddAssign + std::ops::SubAssign,
+    F: Float + std::ops::AddAssign + std::ops::SubAssign + num::FromPrimitive,
 {
     let window: Array1<F> = window.to_array();
     let step = window.len() - overlap;
@@ -313,7 +313,7 @@ where
         }
     }
 
-    bins -= &bins.mean_axis(Axis(0));
+    bins -= &bins.mean_axis(Axis(0)).unwrap();
     bins.fold(F::zero(), |a, b| F::max(a, F::abs(*b))) < eps
 }
 

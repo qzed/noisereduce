@@ -27,7 +27,7 @@ fn main() {
     plot_spectrum(&mut ax, sspse::window::hamming(len), "Hamming");
     plot_spectrum(&mut ax, sspse::window::blackman_nuttall(len), "Blackman-Nuttall");
     plot_spectrum(&mut ax, sspse::window::blackman_harris(len), "Blackman-Harris");
-    fig.show();
+    fig.show().unwrap();
 }
 
 fn plot_spectrum<W>(ax: &mut Axes2D, window: W, name: &'static str)

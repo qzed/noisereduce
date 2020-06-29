@@ -253,7 +253,7 @@ where
     fn process(
         &mut self,
         spectrum_in: ArrayView1<Complex<T>>,
-        mut spectrum_out: ArrayViewMut1<Complex<T>>,
+        spectrum_out: ArrayViewMut1<Complex<T>>,
     ) {
         // update noise estimate
         self.noise_est
@@ -277,7 +277,7 @@ where
         );
 
         // apply gain
-        azip!(mut spectrum_out, spectrum_in, gain (&self.gain) in {
+        azip!((spectrum_out in spectrum_out, spectrum_in in spectrum_in, gain in &self.gain) {
             *spectrum_out = spectrum_in * gain.min(T::one())
         });
     }
@@ -373,8 +373,8 @@ where
         );
 
         // apply gain
-        azip!(mut spec_out (spec_out), spec_in (spec_in), gain_h (&self.gain_h1), p (&self.p_gain) in {
-            *spec_out = spec_in * (gain_h.powf(p) * self.gain_min.powf(T::one() - p)).min(T::one());
+        azip!((spec_out in spec_out, spec_in in spec_in, gain_h in &self.gain_h1, p in &self.p_gain) {
+            *spec_out = spec_in * (gain_h.powf(*p) * self.gain_min.powf(T::one() - *p)).min(T::one());
         });
     }
 }
@@ -430,7 +430,7 @@ where
 
         let p = self.power;
         let two = T::from(2.0).unwrap();
-        azip!(mut spec_out, spec_in, noise (&self.noise_power) in {
+        azip!((spec_out in &mut spec_out, spec_in in spec_in, noise in &self.noise_power) {
             let n = noise.powf(p / two);
 
             let r = spec_in.norm().powf(p) - self.factor * n;

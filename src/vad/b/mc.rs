@@ -74,7 +74,7 @@ where
 
         // pad and compute power/variance
         self.spectrum_padded.slice_mut(s![..w]).fill(T::zero());
-        azip!(mut p (&mut self.spectrum_padded.slice_mut(s![w..w+self.block_size])), s (spectrum) in {
+        azip!((p in &mut self.spectrum_padded.slice_mut(s![w..w+self.block_size]), s in spectrum) {
             *p = s.norm_sqr();
         });
         self.spectrum_padded.slice_mut(s![w + self.block_size..]).fill(T::zero());
@@ -93,14 +93,14 @@ where
 
         // average spectrum recursively over time (S)
         let alpha_s = self.alpha_s;
-        azip!(mut s (&mut self.spectrum_avg), sf (&self.spectrum_f) in {
-            *s = alpha_s * *s + (T::one() - alpha_s) * sf;
+        azip!((s in &mut self.spectrum_avg, sf in &self.spectrum_f) {
+            *s = alpha_s * *s + (T::one() - alpha_s) * *sf;
         });
 
         // minima tracking (S_min, S_tmp)
-        azip!(mut s_min (&mut self.spectrum_min), mut s_tmp (&mut self.spectrum_tmp), s (&self.spectrum_avg) in {
-            *s_min = s_min.min(s);
-            *s_tmp = s_tmp.min(s);
+        azip!((s_min in &mut self.spectrum_min, s_tmp in &mut self.spectrum_tmp, s in &self.spectrum_avg) {
+            *s_min = s_min.min(*s);
+            *s_tmp = s_tmp.min(*s);
         });
 
         self.tracking_frame += 1;
@@ -113,8 +113,8 @@ where
         // compute speech presence probability (p')
         let alpha_p = self.alpha_p;
         let delta = self.delta;
-        azip!(mut p (prob), s (&self.spectrum_avg), s_min (&self.spectrum_min) in {
-            let i = if s / s_min > delta { T::one() } else { T::zero() };
+        azip!((p in prob, s in &self.spectrum_avg, s_min in &self.spectrum_min) {
+            let i = if *s / *s_min > delta { T::one() } else { T::zero() };
             *p = alpha_p * *p + (T::one() - alpha_p) * i;
         });
     }

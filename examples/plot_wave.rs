@@ -28,7 +28,7 @@ fn main() -> Result<(), Error> {
     let ax = fig.axes2d();
     ax.set_x_range(AutoOption::Fix(0.0), AutoOption::Fix(samples.len() as f64 - 1.0));
     ax.lines(0..samples.len(), samples.iter(), &[]);
-    fig.show();
+    fig.show().unwrap();
 
     Ok(())
 }

@@ -35,7 +35,7 @@ fn main() {
     plot(&mut ax, window::tukey(len, 0.5), "Tukey (a=0.5)");
     plot(&mut ax, window::kaiser(len, 8.0), "Kaiser (pa=8)");
 
-    fig.show();
+    fig.show().unwrap();
 }
 
 fn plot<W: WindowFunction<f64>>(ax: &mut Axes2D, window: W, name: &'static str) {

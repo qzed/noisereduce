@@ -23,8 +23,8 @@ where
         D: Data<Elem = Complex<T>>,
         B: DataMut<Elem = bool>,
     {
-        azip!(mut decision (decision), spectrum (spectrum), floor (&self.floor) in {
-            *decision = spectrum.norm_sqr() > floor * self.ratio;
+        azip!((decision in decision, spectrum in spectrum, floor in &self.floor) {
+            *decision = spectrum.norm_sqr() > *floor * self.ratio;
         });
     }
 }
@@ -38,8 +38,8 @@ where
         D: Data<Elem = Complex<T>>,
         E: DataMut<Elem = T>,
     {
-        azip!(mut decision (decision), spectrum (spectrum), floor (&self.floor) in {
-            *decision = if spectrum.norm_sqr() > floor * self.ratio {
+        azip!((decision in decision, spectrum in spectrum, floor in &self.floor) {
+            *decision = if spectrum.norm_sqr() > *floor * self.ratio {
                 T::one()
             } else {
                 T::zero()

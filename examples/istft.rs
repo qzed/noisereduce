@@ -78,7 +78,7 @@ fn main() -> Result<(), Error> {
         let ax = fig.axes2d();
         ax.lines(tx_s.iter(), samples.iter(), &[]);
         ax.lines(tx_o.iter(), out.iter(), &[]);
-        fig.show();
+        fig.show().unwrap();
     }
 
     // write

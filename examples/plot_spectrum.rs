@@ -61,7 +61,7 @@ fn main() -> Result<(), Error> {
     ax.set_x_range(AutoOption::Fix(t0), AutoOption::Fix(t1));
     ax.set_y_range(AutoOption::Fix(f0), AutoOption::Fix(f1));
     ax.image(out.t().iter(), out.shape()[1], out.shape()[0], Some((t0, f0, t1, f1)), &[]);
-    fig.show();
+    fig.show().unwrap();
 
     Ok(())
 }
