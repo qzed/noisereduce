@@ -3,6 +3,7 @@ name = "sspse"
 version = "0.1.0"
 authors = ["Maximilian Luz <luzmaximilian@gmail.com>"]
 edition = "2018"
+exclude = [ "paper/**", "params/**" ]
 
 [lib]
 name="sspse"
