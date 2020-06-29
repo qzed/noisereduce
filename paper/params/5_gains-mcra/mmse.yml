@@ -1,0 +1,33 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hann
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: mmse
+
+    gain:
+      type: mmse
+  
+    noise_estimator:
+        type: probabilistic-exp-time-avg
+        alpha_d: 0.95
+        vad:
+            type: minima-controlled
+            b: { type: hamming }
+            w: 1
+            alpha_s: 0.8
+            alpha_p: 0.2
+            delta: 5.0
+            l: 45
+
+    snr_estimator:
+        type: decision-directed
+        alpha: 0.98
+
+noise:
+    type: frames
+    range: [0, 9]

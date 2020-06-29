@@ -1,0 +1,29 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hann
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: spectral-subtraction
+    power: 1.0
+    factor: 1.5
+    noise_floor: 0.066
+    post_gain: 1.0
+    noise_estimator:
+        type: probabilistic-exp-time-avg
+        alpha_d: 0.95
+        vad:
+            type: minima-controlled
+            b: { type: hamming }
+            w: 1
+            alpha_s: 0.8
+            alpha_p: 0.2
+            delta: 5.0
+            l: 45
+
+noise:
+    type: frames
+    range: [0, 9]

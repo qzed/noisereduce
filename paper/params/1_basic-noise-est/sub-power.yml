@@ -1,0 +1,27 @@
+stft:
+    block_length: 0.02
+    overlap: 0.5
+    window:
+        type: hann
+        periodic: true
+        sqrt: true
+
+algorithm:
+    type: spectral-subtraction
+    power: 1.0
+    factor: 1.0
+    noise_floor: 0.0
+    post_gain: 1.0
+    noise_estimator:
+        type: exp-time-avg
+        alpha: 0.8
+        vad:
+            type: power-threshold
+            decision_ratio: 0.8
+            noise:
+                type: frames
+                range: [0, 9]
+
+noise:
+    type: frames
+    range: [0, 9]
