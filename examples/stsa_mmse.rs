@@ -10,30 +10,32 @@ use sspse::vad::b::power::{self, PowerThresholdVad};
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
-use clap::{value_t_or_exit, App, Arg};
+use clap::{value_t_or_exit, Arg, Command};
 use hound::{Error, WavReader};
 use ndarray::{s, Axis};
 use num::Complex;
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
+fn app() -> Command<'static> {
+    Command::new("Example: Noise reduction via MMSE/log-MMSE STSA Method")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(false))
+                .required(false)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("plot")
                 .help("Wheter to plot the results or not")
-                .short("p")
+                .short('p')
                 .long("plot"))
         .arg(Arg::with_name("log_mmse")
                 .help("Use log-MMSE instead of plain MMSE")
-                .short("l")
+                .short('l')
                 .long("log-mmse"))
         .arg(Arg::with_name("snr_alpha")
                 .help("Alpha value for SNR estimator (exp. avg.)")

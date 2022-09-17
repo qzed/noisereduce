@@ -439,7 +439,7 @@ where
 
             let t = spec_in.arg();
 
-            *spec_out = Complex::from_polar(&r, &t) * self.post_gain;
+            *spec_out = Complex::from_polar(r, t) * self.post_gain;
         });
     }
 }

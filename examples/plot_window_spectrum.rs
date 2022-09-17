@@ -1,15 +1,15 @@
 use sspse::ft;
 use sspse::window::WindowFunction;
 
-use clap::App;
+use clap::Command;
 use gnuplot::{AutoOption, Axes2D, AxesCommon, Caption, Figure};
 use ndarray::Array1;
 use num::Complex;
-use rustfft::FFTplanner;
+use rustfft::{FftPlanner, FftDirection};
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Plot Spectras of various Window Functions")
+fn app() -> Command<'static> {
+    Command::new("Example: Plot Spectras of various Window Functions")
         .author(clap::crate_authors!())
 }
 
@@ -37,21 +37,20 @@ where
     let len = window.len();
     let window = window.to_array();
 
-    let mut planner = FFTplanner::new(false);
-    let fft = planner.plan_fft(len);
+    let mut planner = FftPlanner::new();
+    let fft = planner.plan_fft(len, FftDirection::Forward);
 
-    let mut buf_in  = Array1::zeros(len);
-    let mut buf_out = Array1::zeros(len);
+    let mut buf  = Array1::zeros(len);
 
     for i in 0..len {
-        buf_in[i] = Complex { re: window[i], im: 0.0 };
+        buf[i] = Complex { re: window[i], im: 0.0 };
     }
 
-    fft.process(buf_in.as_slice_mut().unwrap(), buf_out.as_slice_mut().unwrap());
+    fft.process(buf.as_slice_mut().unwrap());
 
     let mut freq = Array1::zeros(len);
     for i in 0..len {
-        freq[i] = buf_out[i].norm();
+        freq[i] = buf[i].norm();
     }
 
     let freq = freq.mapv_into(ft::magnitude_to_db);

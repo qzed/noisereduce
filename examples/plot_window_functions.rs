@@ -1,12 +1,12 @@
 use sspse::window;
 use sspse::window::WindowFunction;
 
-use clap::App;
+use clap::Command;
 use gnuplot::{AutoOption, Axes2D, AxesCommon, Figure};
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Plot various Window Functions")
+fn app() -> Command<'static> {
+    Command::new("Example: Plot various Window Functions")
         .author(clap::crate_authors!())
 }
 

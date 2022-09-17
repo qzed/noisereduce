@@ -11,26 +11,28 @@ use sspse::vad::b::soft::SoftDecisionProbabilityEstimator;
 use sspse::wave::WavReaderExt;
 use sspse::window as W;
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use hound::{Error, WavReader};
 use ndarray::{s, Axis};
 use num::{traits::FloatConst, traits::NumAssign, Complex, Float};
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Noise reduction via OM-LSA+MCRA Method")
+fn app() -> Command<'static> {
+    Command::new("Example: Noise reduction via OM-LSA+MCRA Method")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(false))
+                .required(false)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("plot")
                 .help("Wheter to plot the results or not")
-                .short("p")
+                .short('p')
                 .long("plot"))
 }
 

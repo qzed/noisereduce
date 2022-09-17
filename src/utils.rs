@@ -5,7 +5,7 @@ use std::path::Path;
 
 use ndarray::{ArrayBase, Data, Ix1, Ix2};
 use num::{Complex, Float, traits::NumAssign};
-use rustfft::FFTnum;
+use rustfft::FftNum;
 
 
 pub fn write_wav<T, D, P: AsRef<Path>>(path: P, data: &ArrayBase<D, Ix1>, sample_rate: u32)
@@ -36,7 +36,7 @@ where
 pub fn plot_spectras<T, D1, D2>(spectrum_in: &ArrayBase<D1, Ix2>, spectrum_out: &ArrayBase<D2, Ix2>,
                             stft: &Stft<T>, num_samples: usize, sample_rate: u32)
 where
-    T: FFTnum + Float + NumAssign + NumCastUnchecked,
+    T: FftNum + Float + NumAssign + NumCastUnchecked,
     for<'a> &'a T: gnuplot::DataType,
     D1: Data<Elem = Complex<T>>,
     D2: Data<Elem = Complex<T>>,

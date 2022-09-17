@@ -17,11 +17,11 @@ use sspse::window::{self, WindowFunction};
 
 use std::path::PathBuf;
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use hound::WavReader;
 use ndarray::{s, Array1, ArrayBase, Axis, Data, Ix2};
 use num::{traits::FloatConst, traits::NumAssign, Complex, Float};
-use rustfft::FFTnum;
+use rustfft::FftNum;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
@@ -674,7 +674,7 @@ where
 #[allow(clippy::cast_lossless)]
 fn build_stft<T>(params: &StftParameters, sample_rate: u32) -> Stft<T>
 where
-    T: Float + FloatConst + NumCastUnchecked + FFTnum,
+    T: Float + FloatConst + NumCastUnchecked + FftNum,
 {
     let block_length = (params.block_length * sample_rate as f64) as usize;
     let fft_length = params.fft_length.unwrap_or(block_length);
@@ -690,7 +690,7 @@ where
 #[allow(clippy::cast_lossless)]
 fn build_istft<T>(params: &StftParameters, sample_rate: u32) -> Istft<T>
 where
-    T: Float + FloatConst + NumCastUnchecked + FFTnum,
+    T: Float + FloatConst + NumCastUnchecked + FftNum,
 {
     let block_length = (params.block_length * sample_rate as f64) as usize;
     let fft_length = params.fft_length.unwrap_or(block_length);
@@ -931,16 +931,16 @@ where
 #[allow(clippy::enum_variant_names)]
 enum Error {
     #[snafu(display("Unable to read wave file at '{}':\n\t{}", path.display(), source))]
-    WaveInputError { source: hound::Error, path: PathBuf },
+    WaveInput { source: hound::Error, path: PathBuf },
 
     #[snafu(display("Unable to write wave file to '{}':\n\t{}", path.display(), source))]
-    WaveOutputError { source: hound::Error, path: PathBuf },
+    WaveOutput { source: hound::Error, path: PathBuf },
 
     #[snafu(display("Unable to load parameter file '{}':\n\t{}", path.display(), source))]
-    ParameterIoError { source: std::io::Error, path: PathBuf },
+    ParameterIo { source: std::io::Error, path: PathBuf },
 
     #[snafu(display("Unable to load parameter file '{}':\n\t{}", path.display(), source))]
-    ParameterFormatError { source: serde_yaml::Error, path: PathBuf },
+    ParameterFormat { source: serde_yaml::Error, path: PathBuf },
 }
 
 struct CliError(Error);
@@ -958,27 +958,30 @@ impl std::fmt::Debug for CliError {
 }
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Noise reduction toolkit")
+fn app() -> Command<'static> {
+    Command::new("Noise reduction toolkit")
         .author(clap::crate_authors!())
         .version(clap::crate_version!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(false))
+                .required(false)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("params")
                 .help("The parameters to use (as yaml file)")
                 .value_name("PARAMS")
-                .short("p")
+                .short('p')
                 .long("params")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("show")
                 .help("Wheter to plot the spectras or not")
-                .short("s")
+                .short('s')
                 .long("show"))
 }
 
@@ -991,18 +994,18 @@ fn main() -> Result<(), CliError> {
 
     // load parameters
     let params = std::fs::File::open(path_params)
-        .context(ParameterIoError { path: PathBuf::from(path_params) })?;
+        .context(ParameterIoSnafu { path: PathBuf::from(path_params) })?;
 
     let params: Parameters = serde_yaml::from_reader(params)
-        .context(ParameterFormatError { path: PathBuf::from(path_params) })?;
+        .context(ParameterFormatSnafu { path: PathBuf::from(path_params) })?;
 
     println!("{:#?}", params);
 
     // load first channel of wave file
     let (samples, samples_spec) = WavReader::open(path_in)
-        .context(WaveInputError { path: PathBuf::from(path_in) })?
+        .context(WaveInputSnafu { path: PathBuf::from(path_in) })?
         .collect_convert_dyn::<f64>()
-        .context(WaveInputError { path: PathBuf::from(path_in) })?;
+        .context(WaveInputSnafu { path: PathBuf::from(path_in) })?;
 
     let samples = samples.index_axis_move(Axis(1), 0);
     let samples_c = samples.mapv(|v| Complex { re: v, im: 0.0 });
@@ -1031,7 +1034,7 @@ fn main() -> Result<(), CliError> {
     // write
     if let Some(path_out) = path_out {
         utils::write_wav(path_out, &out, samples_spec.sample_rate)
-            .context(WaveOutputError { path: PathBuf::from(path_out) })?;
+            .context(WaveOutputSnafu { path: PathBuf::from(path_out) })?;
     }
 
     // plot

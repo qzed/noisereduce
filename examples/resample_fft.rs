@@ -1,26 +1,29 @@
+use rustfft::FftDirection;
 use sspse::ft;
 use sspse::wave::WavReaderExt;
 
-use clap::{value_t_or_exit, App, Arg};
+use clap::{value_t_or_exit, Arg, Command};
 use hound::{Error, WavReader};
-use ndarray::{Array1, Axis};
+use ndarray::Axis;
 use num::Complex;
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Re-sample Audio Signal using Fast Fourier Transform")
+fn app() -> Command<'static> {
+    Command::new("Example: Re-sample Audio Signal using Fast Fourier Transform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("samplerate")
                 .help("The target sample-rate")
-                .short("r")
+                .short('r')
                 .long("sample-rate")
                 .takes_value(true)
                 .default_value("24000"))
@@ -38,36 +41,33 @@ fn main() -> Result<(), Error> {
     let samples = samples.index_axis_move(Axis(1), 0);
 
     // convert real to complex
-    let mut input = samples.mapv(|v| Complex { re: v, im: 0.0 });
+    let mut buf = samples.mapv(|v| Complex { re: v, im: 0.0 });
 
     // compute parameters based on new sample rate
-    let num_input_samples = input.len();
+    let num_input_samples = buf.len();
     let num_output_samples =
         (num_input_samples as f64 * sample_rate as f64 / samples_spec.sample_rate as f64) as usize;
 
     // compute fft
-    let mut spectrum = Array1::zeros(num_input_samples);
-    let mut output = Array1::zeros(num_output_samples);
-
-    let fft = rustfft::FFTplanner::new(false).plan_fft(num_input_samples);
-    fft.process(input.as_slice_mut().unwrap(), spectrum.as_slice_mut().unwrap());
+    let fft = rustfft::FftPlanner::new().plan_fft(num_input_samples, FftDirection::Forward);
+    fft.process(buf.as_slice_mut().unwrap());
 
     // adapt spectrum
-    let mut spectrum = ft::spectrum_resize(num_output_samples, &spectrum);
+    let mut buf = ft::spectrum_resize(num_output_samples, &buf);
 
     // compute inverse fft
-    let ifft = rustfft::FFTplanner::new(true).plan_fft(num_output_samples);
-    ifft.process(spectrum.as_slice_mut().unwrap(), output.as_slice_mut().unwrap());
+    let ifft = rustfft::FftPlanner::new().plan_fft(num_output_samples, FftDirection::Inverse);
+    ifft.process(buf.as_slice_mut().unwrap());
 
     // drop imaginary part and normalize
     let norm = num_output_samples as f32 / num_input_samples as f32;
     let norm = norm / ((num_output_samples as f32).sqrt() * (num_output_samples as f32).sqrt());
-    let out = output.mapv(|v| v.re * norm);
+    let out = buf.mapv(|v| v.re * norm);
 
     // write
     let out_spec = hound::WavSpec {
         channels: 1,
-        sample_rate: sample_rate,
+        sample_rate,
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };

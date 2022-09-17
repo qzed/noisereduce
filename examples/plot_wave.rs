@@ -1,18 +1,19 @@
 use sspse::wave::WavReaderExt;
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use gnuplot::{AutoOption, AxesCommon, Figure};
 use hound::{Error, WavReader};
 use ndarray::Axis;
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Plot Signal Waveform")
+fn app() -> Command<'static> {
+    Command::new("Example: Plot Signal Waveform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
 }
 
 fn main() -> Result<(), Error> {

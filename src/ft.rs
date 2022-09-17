@@ -9,7 +9,7 @@ use std::sync::Arc;
 use ndarray::{s, Array1, Array2, ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use num::traits::{Float, NumAssign, Zero};
 use num::Complex;
-use rustfft::{FFTnum, FFTplanner, FFT};
+use rustfft::{FftNum, FftPlanner, Fft, FftDirection};
 
 
 pub fn magnitude_to_db<F: Float>(m: F) -> F {
@@ -335,7 +335,7 @@ pub enum InversionMethod {
 
 
 pub struct StftBuilder<T> {
-    fft: Arc<dyn FFT<T>>,
+    fft: Arc<dyn Fft<T>>,
     padding: Padding,
     window: Array1<T>,
     overlap: Option<usize>,
@@ -344,7 +344,7 @@ pub struct StftBuilder<T> {
 
 impl<T> StftBuilder<T>
 where
-    T: FFTnum,
+    T: FftNum,
 {
     pub fn new<W>(window: &W) -> Self
     where
@@ -357,10 +357,10 @@ where
     where
         W: WindowFunction<T> + ?Sized,
     {
-        Self::with_fft(window, FFTplanner::new(false).plan_fft(fft_len))
+        Self::with_fft(window, FftPlanner::new().plan_fft(fft_len, FftDirection::Forward))
     }
 
-    pub fn with_fft<W>(window: &W, fft: Arc<dyn FFT<T>>) -> Self
+    pub fn with_fft<W>(window: &W, fft: Arc<dyn Fft<T>>) -> Self
     where
         W: WindowFunction<T> + ?Sized,
     {
@@ -401,8 +401,7 @@ where
             window: self.window,
             padding: self.padding,
             shifted: self.shifted,
-            buf_in: Array1::zeros(len_fft),
-            buf_out: Array1::zeros(len_fft),
+            buffer: Array1::zeros(len_fft),
             buf_pad: Vec::new(),
             len_fft,
             len_segment,
@@ -412,21 +411,20 @@ where
 }
 
 pub struct Stft<T> {
-    fft: Arc<dyn FFT<T>>,
+    fft: Arc<dyn Fft<T>>,
     len_fft: usize,
     len_overlap: usize,
     len_segment: usize,
     shifted: bool,
     window: Array1<T>,
     padding: Padding,
-    buf_in: Array1<Complex<T>>,
-    buf_out: Array1<Complex<T>>,
+    buffer: Array1<Complex<T>>,
     buf_pad: Vec<Complex<T>>,
 }
 
 impl<T> Stft<T>
 where
-    T: FFTnum + Float + NumAssign,
+    T: FftNum + Float + NumAssign,
 {
     pub fn len_segment(&self) -> usize {
         self.len_segment
@@ -513,35 +511,32 @@ where
             // zero padding at start and end + windowing
             let s = (self.len_fft - self.len_segment) / 2;
             for j in 0..s {
-                self.buf_in[j] = Complex::zero();
+                self.buffer[j] = Complex::zero();
             }
             for j in 0..self.len_segment {
-                self.buf_in[s + j] = input_padded[k + j] * self.window[j];
+                self.buffer[s + j] = input_padded[k + j] * self.window[j];
             }
             for j in s + self.len_segment..self.len_fft {
-                self.buf_in[j] = Complex::zero();
+                self.buffer[j] = Complex::zero();
             }
 
             // fft
-            self.fft.process(
-                self.buf_in.as_slice_mut().unwrap(),
-                self.buf_out.as_slice_mut().unwrap(),
-            );
+            self.fft.process(self.buffer.as_slice_mut().unwrap());
 
             // copy to output segment
             if !self.shifted {
                 output
                     .slice_mut(s![i, 0..self.len_fft])
-                    .assign(&self.buf_out);
+                    .assign(&self.buffer);
             } else {
-                fftshift_into(&self.buf_out, &mut output.slice_mut(s![i, 0..self.len_fft]));
+                fftshift_into(&self.buffer, &mut output.slice_mut(s![i, 0..self.len_fft]));
             }
         }
     }
 }
 
 pub struct IstftBuilder<T> {
-    ifft: Arc<dyn FFT<T>>,
+    ifft: Arc<dyn Fft<T>>,
     method: InversionMethod,
     remove_padding: bool,
     window: Array1<T>,
@@ -550,7 +545,7 @@ pub struct IstftBuilder<T> {
 
 impl<T> IstftBuilder<T>
 where
-    T: FFTnum,
+    T: FftNum,
 {
     pub fn new<W>(window: &W) -> Self
     where
@@ -563,10 +558,10 @@ where
     where
         W: WindowFunction<T> + ?Sized,
     {
-        Self::with_ifft(window, FFTplanner::new(true).plan_fft(fft_len))
+        Self::with_ifft(window, FftPlanner::new().plan_fft(fft_len, FftDirection::Forward))
     }
 
-    pub fn with_ifft<W>(window: &W, ifft: Arc<dyn FFT<T>>) -> Self
+    pub fn with_ifft<W>(window: &W, ifft: Arc<dyn Fft<T>>) -> Self
     where
         W: WindowFunction<T> + ?Sized,
     {
@@ -607,8 +602,7 @@ where
             method: self.method,
             window: self.window,
             remove_padding: self.remove_padding,
-            buf_in: Array1::zeros(len_fft),
-            buf_out: Array1::zeros(len_fft),
+            buffer: Array1::zeros(len_fft),
             buf_acc: Vec::new(),
             buf_norm: Vec::new(),
             len_fft,
@@ -619,22 +613,21 @@ where
 }
 
 pub struct Istft<T> {
-    ifft: Arc<dyn FFT<T>>,
+    ifft: Arc<dyn Fft<T>>,
     method: InversionMethod,
     len_fft: usize,
     len_overlap: usize,
     len_segment: usize,
     window: Array1<T>,
     remove_padding: bool,
-    buf_in: Array1<Complex<T>>,
-    buf_out: Array1<Complex<T>>,
+    buffer: Array1<Complex<T>>,
     buf_acc: Vec<Complex<T>>,
     buf_norm: Vec<T>,
 }
 
 impl<T> Istft<T>
 where
-    T: FFTnum + Float + NumAssign,
+    T: FftNum + Float + NumAssign,
 {
     pub fn len_segment(&self) -> usize {
         self.len_segment
@@ -709,19 +702,16 @@ where
 
         // overlap and add
         for i in 0..len_spectrum {
-            self.buf_in.assign(&input.index_axis(Axis(0), i));
+            self.buffer.assign(&input.index_axis(Axis(0), i));
 
-            self.ifft.process(
-                self.buf_in.as_slice_mut().unwrap(),
-                self.buf_out.as_slice_mut().unwrap(),
-            );
+            self.ifft.process(self.buffer.as_slice_mut().unwrap());
 
             // handle fft and segment length difference (remove padding)
             let s = (self.len_fft - self.len_segment) / 2;
 
             // (weighted) overlap+add (+ fft normalization)
             for (j, v) in self
-                .buf_out
+                .buffer
                 .slice(s![s..s + self.len_segment])
                 .indexed_iter()
             {

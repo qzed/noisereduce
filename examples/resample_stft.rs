@@ -2,26 +2,28 @@ use sspse::ft;
 use sspse::wave::WavReaderExt;
 use sspse::window::{self as W, WindowFunction};
 
-use clap::{value_t_or_exit, App, Arg};
+use clap::{value_t_or_exit, Arg, Command};
 use hound::{Error, WavReader};
 use ndarray::{Array2, Axis};
 use num::Complex;
 
 
-fn app() -> App<'static, 'static> {
-    App::new("Example: Re-sample Audio Signal using Short-Time Fourier Transform")
+fn app() -> Command<'static> {
+    Command::new("Example: Re-sample Audio Signal using Short-Time Fourier Transform")
         .author(clap::crate_authors!())
         .arg(Arg::with_name("input")
                 .help("The input file to use (wav)")
                 .value_name("INPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("output")
                 .help("The file to write the result to (wav)")
                 .value_name("OUTPUT")
-                .required(true))
+                .required(true)
+                .allow_invalid_utf8(true))
         .arg(Arg::with_name("samplerate")
                 .help("The target sample-rate")
-                .short("r")
+                .short('r')
                 .long("sample-rate")
                 .takes_value(true)
                 .default_value("24000"))
