@@ -17,6 +17,12 @@ impl<T> NoUpdate<T> {
     }
 }
 
+impl<T> Default for NoUpdate<T> {
+    fn default() -> Self {
+        Self { _p: Default::default() }
+    }
+}
+
 impl<T> NoiseTracker<T> for NoUpdate<T>
 where
     T: Float,

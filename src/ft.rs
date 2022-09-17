@@ -176,7 +176,7 @@ where
     F: Clone + Zero,
 {
     output.slice_mut(s![0..n]).fill(F::zero());
-    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n..n + input.len()]).assign(input);
     output.slice_mut(s![n + input.len()..]).fill(F::zero());
 }
 
@@ -200,7 +200,7 @@ where
     let b = input[input.len() - 1].clone();
 
     output.slice_mut(s![0..n]).fill(a);
-    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n..n + input.len()]).assign(input);
     output.slice_mut(s![n + input.len()..]).fill(b);
 }
 
@@ -223,7 +223,7 @@ where
     output
         .slice_mut(s![0..n])
         .assign(&input.slice(s![1..=n; -1]));
-    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n..n + input.len()]).assign(input);
     output
         .slice_mut(s![n + input.len()..])
         .assign(&input.slice(s![input.len()-n-1..input.len()-1; -1]));
@@ -252,7 +252,7 @@ where
     ext_a.fill(a);
     ext_a -= &input.slice(s![1..=n; -1]);
 
-    output.slice_mut(s![n..n + input.len()]).assign(&input);
+    output.slice_mut(s![n..n + input.len()]).assign(input);
 
     let mut ext_b = output.slice_mut(s![n + input.len()..]);
     ext_b.fill(b);
@@ -391,7 +391,7 @@ where
     pub fn build(self) -> Stft<T> {
         let len_fft = self.fft.len();
         let len_segment = self.window.len();
-        let len_overlap = self.overlap.unwrap_or_else(|| (len_segment / 4) * 3);
+        let len_overlap = self.overlap.unwrap_or((len_segment / 4) * 3);
 
         assert!(len_overlap < len_segment);
         assert!(len_fft >= len_segment);
@@ -592,7 +592,7 @@ where
     pub fn build(self) -> Istft<T> {
         let len_fft = self.ifft.len();
         let len_segment = self.window.len();
-        let len_overlap = self.overlap.unwrap_or_else(|| (len_segment / 4) * 3);
+        let len_overlap = self.overlap.unwrap_or((len_segment / 4) * 3);
 
         assert!(len_overlap < len_segment);
         assert!(len_fft >= len_segment);
@@ -756,7 +756,7 @@ where
     let output_len = output.len();
 
     if input_len == output_len {
-        output.assign(&input);
+        output.assign(input);
         return;
     }
 
@@ -766,6 +766,7 @@ where
     output.slice_mut(s![..n / 2]).assign(&input.slice(s![..n / 2]));
     output.slice_mut(s![output_len - n / 2..]).assign(&input.slice(s![input_len - n / 2..]));
 
+    #[allow(clippy::comparison_chain)]
     if output_len < input_len {
         // downsampling
         if output_len % 2 == 1 {
